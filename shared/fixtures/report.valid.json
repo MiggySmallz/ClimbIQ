@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "video_id": "8f14e45f-ceea-467e-9598-0e5b3b5c9f1a",
+  "observations": [
+    {
+      "key": "barn_door",
+      "severity": "medium",
+      "evidence": "Hips swung out on 4 of 11 moves",
+      "segments": [{ "start_s": 12.4, "end_s": 15.1 }],
+      "verified": true,
+      "drill": "Practice flagging on steep terrain to keep hips square to the wall."
+    },
+    {
+      "key": "full_crimp_risk",
+      "severity": "high",
+      "evidence": "Sustained DIP hyperextension on 3 crimps",
+      "segments": [
+        { "start_s": 20.0, "end_s": 22.5 },
+        { "start_s": 40.2, "end_s": 41.0 }
+      ],
+      "verified": false,
+      "drill": "Favor open-hand/half-crimp grip on small edges to reduce pulley strain."
+    }
+  ],
+  "positives": [{ "key": "heel_hook", "evidence": "Clean heel-hook on the top-out move" }],
+  "scores": { "balance": 62, "footwork": 71, "grip": 55, "body_position": 68, "overall": 64 },
+  "grade_estimate": "V4",
+  "coaching_text": "Solid climb overall — your footwork is a strength. Watch the hip position on steep moves; letting your hips drift from the wall costs reach and loads your arms more than it needs to. On crimps, easing off full-crimp in favor of open-hand will protect your fingers long-term without costing much grip strength at this angle.",
+  "llm_model": "qwen3.6-27b-q4_k_m",
+  "pipeline": { "pose_fps": 3.0, "frames_analyzed": 180, "duration_s": 61.2 }
+}

@@ -5,9 +5,11 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "validate-schema": "node scripts/validate-schema.mjs"
   },
   "devDependencies": {
+    "ajv": "^8.20.0",
     "typescript": "~5.8.3"
   }
 }

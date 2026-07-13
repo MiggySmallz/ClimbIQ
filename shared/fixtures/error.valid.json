@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "video_id": "8f14e45f-ceea-467e-9598-0e5b3b5c9f1a",
+  "error": {
+    "stage": "pose",
+    "message": "No person detected in any sampled frame"
+  }
+}

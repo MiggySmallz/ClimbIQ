@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://climbiq.app/schema/report.schema.json",
+  "title": "AnalysisReport",
+  "description": "result.json contract, spec §10. Mirrors shared/src/report.ts — keep in sync.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "video_id",
+    "observations",
+    "positives",
+    "scores",
+    "grade_estimate",
+    "coaching_text",
+    "llm_model",
+    "pipeline"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "video_id": { "type": "string", "minLength": 1 },
+    "observations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/observation" }
+    },
+    "positives": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/positive" }
+    },
+    "scores": { "$ref": "#/$defs/scores" },
+    "grade_estimate": { "type": ["string", "null"] },
+    "coaching_text": { "type": "string", "minLength": 1 },
+    "llm_model": { "type": "string", "minLength": 1 },
+    "pipeline": { "$ref": "#/$defs/pipeline" }
+  },
+  "$defs": {
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_s", "end_s"],
+      "properties": {
+        "start_s": { "type": "number", "minimum": 0 },
+        "end_s": { "type": "number", "minimum": 0 }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "severity", "evidence", "segments", "verified", "drill"],
+      "properties": {
+        "key": {
+          "enum": ["barn_door", "hip_drop", "bent_arm_hang", "full_crimp_risk", "poor_foot_contact"]
+        },
+        "severity": { "enum": ["high", "medium", "low"] },
+        "evidence": { "type": "string", "minLength": 1 },
+        "segments": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/segment" }
+        },
+        "verified": { "type": "boolean" },
+        "drill": { "type": "string", "minLength": 1 }
+      }
+    },
+    "positive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "evidence"],
+      "properties": {
+        "key": { "enum": ["heel_hook"] },
+        "evidence": { "type": "string", "minLength": 1 }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["balance", "footwork", "grip", "body_position", "overall"],
+      "properties": {
+        "balance": { "type": "number", "minimum": 0, "maximum": 100 },
+        "footwork": { "type": "number", "minimum": 0, "maximum": 100 },
+        "grip": { "type": "number", "minimum": 0, "maximum": 100 },
+        "body_position": { "type": "number", "minimum": 0, "maximum": 100 },
+        "overall": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "pipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pose_fps", "frames_analyzed", "duration_s"],
+      "properties": {
+        "pose_fps": { "type": "number", "exclusiveMinimum": 0 },
+        "frames_analyzed": { "type": "integer", "minimum": 0 },
+        "duration_s": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

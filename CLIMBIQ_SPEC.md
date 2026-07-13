@@ -314,6 +314,23 @@ The analysis job produces `result.json`; orchestrator validates it (JSON Schema)
 
 `observations[].key` is the stable vocabulary for progress-over-time — changing a key is a breaking change; add new keys, don't rename. `version` is load-bearing on the client too: the app checks it before rendering and shows a graceful "update the app to view this report" fallback for unknown versions.
 
+Initial `observations[].key` vocabulary (issues): `barn_door`, `hip_drop`, `bent_arm_hang`, `full_crimp_risk`, `poor_foot_contact`. Initial `positives[].key` vocabulary: `heel_hook`. Detection rule per key is documented in `shared/src/reportKeys.ts` — additive-only, same rule as above.
+
+On failure, the job PUTs a structured error JSON to `RESULT_PUT_URL` instead of a report, and exits non-zero:
+
+```jsonc
+{
+  "version": 1,
+  "video_id": "…",
+  "error": {
+    "stage": "download|pose|features|llm|render|upload|unknown",
+    "message": "…"                    // orchestrator logs only — never forwarded to the client verbatim (§3)
+  }
+}
+```
+
+Both shapes are defined as TS types (`shared/src/report.ts`) and JSON Schema (`shared/src/report.schema.json`, `shared/src/error.schema.json`), with a validation script (`shared/scripts/validate-schema.mjs`, run via `npm run validate-schema` in `/shared`) that checks the schemas against fixtures under `shared/fixtures/`.
+
 ## 11. User & data lifecycle (end-to-end)
 
 1. Sign up (Google/email) → profile created.
