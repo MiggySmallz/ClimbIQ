@@ -12,6 +12,8 @@ from artifacts import fetch, put
 from features import ClimbFeatures, extract_features
 from job_env import JobEnv, JobEnvError, load_job_env
 from pose import PoseEngine, PoseFrame, smooth_keypoints
+from rules import RuleResult, detect_issues
+from scoring import compute_scores, estimate_grade
 from video_decode import sample_frames
 
 
@@ -65,12 +67,29 @@ def run_pipeline(env: JobEnv, work_dir: Path) -> None:
 
     try:
         climb = extract_features(pose_frames)
+        rule_result = detect_issues(climb)
+        scores = compute_scores(rule_result)
+        grade = estimate_grade(climb, env.params.declared_grade)
+    except StageError:
+        raise
     except Exception as e:
         raise StageError('features', f'feature extraction failed: {e}') from e
     print_feature_stats(climb)
+    print_rule_results(rule_result, scores, grade)
 
-    # Rule-based issue detection, scores, LLM, render, upload land in M2.10–M2.18.
-    raise StageError('features', 'pipeline not implemented past feature extraction yet')
+    # LLM verification/coaching, overlay render, artifact upload land in M2.12–M2.18.
+    raise StageError('llm', 'pipeline not implemented past rules/scores yet')
+
+
+def print_rule_results(result: RuleResult, scores: dict, grade: str | None) -> None:
+    print(f'rules: {len(result.issues)} issues, {len(result.positives)} positives '
+          f'over {result.duration_s:.0f}s of climbing')
+    for i in result.issues:
+        segs = ', '.join(f'{s:.1f}-{e:.1f}s' for s, e in i.segments)
+        print(f'  [{i.severity}] {i.key}: {i.evidence} ({segs})')
+    for p in result.positives:
+        print(f'  [+] {p.key}: {p.evidence}')
+    print(f'  scores: {scores}, grade_estimate: {grade}')
 
 
 def print_feature_stats(climb: ClimbFeatures) -> None:

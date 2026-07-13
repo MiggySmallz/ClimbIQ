@@ -82,8 +82,10 @@
   - barn-door via lateral hip travel
   - hip-drop vs baseline = 90th-percentile hip height over first 2 s of detected climbing (never frame 0)
 > STATUS: `src/features.py` — per-frame features + 2s-window hip baseline, output sanity-verified on all 3 test videos. Owner decision 2026-07-13 (recorded in spec §8.1): hand/finger features are **secondary** — gated at 0.5 kp-confidence with all finger joints required, ranked below body-level features; sloper class dropped for v1 (2D projection can't see it reliably). Barn-door here = per-frame hip x only; the short-window oscillation rule lands in M2.10 (test video 1 is a traverse — total lateral travel is NOT the signal). Thresholds are named constants, beta — tune in M2.19.
-- [ ] **M2.10** Rule-based issue detection → ranked issues with severity, evidence text, time segments. Rules decide *what* was detected; LLM never does (§3).
-- [ ] **M2.11** Scores (per-category 0–100 + overall) + grade estimate: transparent heuristic from issue counts/severities, labeled "beta" (§8.1, §14.1).
+- [x] **M2.10** Rule-based issue detection → ranked issues with severity, evidence text, time segments. Rules decide *what* was detected; LLM never does (§3).
+> STATUS: `src/rules.py` — all 5 issue keys + heel_hook positive; barn-door = short-window out-and-back excursion (traverse video correctly yields none); ranking = severity, then body-level before hand-derived, then time affected. Verified on all 3 test videos. Known tuning item for M2.19: `poor_foot_contact` (TOE_UP_DEG=35°) likely over-triggers on profile-view feet — fired high on all 3 videos.
+- [x] **M2.11** Scores (per-category 0–100 + overall) + grade estimate: transparent heuristic from issue counts/severities, labeled "beta" (§8.1, §14.1).
+> STATUS: `src/scoring.py` — per-category penalties by severity; overall weights grip at 0.1 (owner de-emphasis). Grade estimate v1 anchors on declared_grade or abstains (technique features can't derive route grade); LLM stage may refine (M2.15), calibration stays §14.1's open question.
 
 ### M2.D — LLM stage
 - [ ] **M2.12** Bake Qwen3.6-27B GGUF Q4_K_M (~17 GB) + vision projector into image; serve via llama.cpp (§2, §8.1). Verify VRAM budget fits 24 GB: pose ONNX ~2 GB + Qwen ~17 GB + vision/KV overhead.
