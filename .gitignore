@@ -49,6 +49,7 @@ Thumbs.db
 *.mp4
 *.mov
 !docs/**/*.mp4
+test-videos/
 
 # Claude Code local state
 .claude/

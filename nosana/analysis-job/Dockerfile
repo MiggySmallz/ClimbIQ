@@ -1,7 +1,9 @@
 # CUDA runtime base, Python 3.11, no PyTorch (spec §8.1) — pose inference is
 # rtmlib (YOLOX + RTMW) on onnxruntime-gpu; the LLM stage (llama.cpp + Qwen
-# GGUF) is baked in later, M2.12.
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# GGUF) is baked in later, M2.12. The cudnn variant ships cuDNN 9 system-wide,
+# which ORT's CUDA provider dlopens — the pip nvidia-cudnn wheel lands in
+# site-packages where ORT does not look on Linux.
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -33,7 +35,7 @@ COPY requirements.txt .
 # reasoning applies to opencv-python vs opencv-contrib-python-headless, hence
 # rtmlib's other deps are pinned separately in requirements.txt, not resolved
 # from its own metadata).
-RUN python3.11 -m pip install --no-cache-dir "onnxruntime-gpu[cuda,cudnn]==1.26.0" \
+RUN python3.11 -m pip install --no-cache-dir "onnxruntime-gpu==1.26.0" \
     && python3.11 -m pip install --no-cache-dir --no-deps rtmlib==0.0.15 \
     && python3.11 -m pip install --no-cache-dir -r requirements.txt
 
