@@ -45,11 +45,15 @@
 
 **Goal:** climbs CRUD + stats. **Exit criteria:** app is daily-usable as a climbing journal with zero AI features (§11.2).
 
-- [ ] **M1.1** Migration 0002: `climbs` table + indexes per §9, RLS owner-only.
-- [ ] **M1.2** Climbs tab: list screen (reverse-chron by `attempted_at`), with empty/loading/error states (§6 rules).
-- [ ] **M1.3** Add/edit climb form: name, gym/location, grade (V-scale string), style, sent/attempt toggle, date, notes (§6 Climbs).
-- [ ] **M1.4** Delete climb (confirm dialog).
-- [ ] **M1.5** Stats screen (Home tab or Climbs sub-screen): grade pyramid + sends-over-time chart using `react-native-gifted-charts` or victory-native (§6 Stats). Journal-only stats for now; technique trends come in M5.
+- [x] **M1.1** Migration 0002: `climbs` table + indexes per §9, RLS owner-only. (Applied to remote 2026-07-13.)
+- [~] **M1.2** Climbs tab: list screen (reverse-chron by `attempted_at`), with empty/loading/error states (§6 rules).
+> STATUS: implemented (FlatList + pull-to-refresh + FAB); needs device verification.
+- [~] **M1.3** Add/edit climb form: name, gym/location, grade (V-scale string), style, sent/attempt toggle, date, notes (§6 Climbs).
+> STATUS: implemented as modal route `climb-form.tsx` (grade/style chips, native date picker); needs device verification.
+- [~] **M1.4** Delete climb (confirm dialog).
+> STATUS: implemented (delete button in edit form with confirm); needs device verification.
+- [~] **M1.5** Stats screen (Home tab): grade pyramid + sends-over-time (last 6 months) with `react-native-gifted-charts`, plus sends/projects tiles. Journal-only stats; technique trends come in M5.
+> STATUS: implemented on Home tab; needs device verification.
 - [ ] **M1.6** Empty/loading/error states verified on every list screen added so far.
 
 ---
