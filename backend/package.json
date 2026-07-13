@@ -1,0 +1,7 @@
+{
+  "name": "@climbiq/backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ClimbIQ orchestrator service (Fastify) — service code lands in M3; this package currently holds Supabase migrations.",
+  "scripts": {}
+}

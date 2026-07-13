@@ -1,0 +1,51 @@
+# Secrets — never commit (spec §13)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+dist/
+build/
+
+# Expo / React Native
+.expo/
+.expo-shared/
+expo-env.d.ts
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+android/
+ios/
+web-build/
+
+# Python (nosana analysis job)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Model weights — baked into Docker image, never committed
+*.onnx
+*.gguf
+
+# Supabase local dev
+backend/supabase/.temp/
+backend/supabase/.branches/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test / scratch media
+*.mp4
+*.mov
+!docs/**/*.mp4
