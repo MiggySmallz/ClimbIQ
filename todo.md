@@ -19,22 +19,27 @@
 **Goal:** monorepo + Supabase + Expo app with working auth. **Exit criteria:** a user can sign up (Google or email), set a username, and see an empty app shell. CI passes.
 
 ### M0.A — Repo & tooling
-- [ ] **M0.1** Initialize git repo + monorepo layout per §5: `/mobile`, `/backend` (with `/backend/supabase`), `/nosana/analysis-job`, `/nosana/job-definition.json`, `/shared`. Keep `CLIMBIQ_SPEC.md` and this `todo.md` at root.
-- [ ] **M0.2** Root `.gitignore` covering `.env*` everywhere, `node_modules`, Expo artifacts, Python caches. **Must be in the first commit** (§13).
-- [ ] **M0.3** TypeScript strict config for `/mobile`, `/backend`, `/shared`; shared lint config (eslint + prettier).
-- [ ] **M0.4** CI workflow: typecheck + lint on all TS packages + migration check (migrations apply cleanly to a fresh DB) (§12.1).
+- [x] **M0.1** Initialize git repo + monorepo layout per §5: `/mobile`, `/backend` (with `/backend/supabase`), `/nosana/analysis-job`, `/nosana/job-definition.json`, `/shared`. Keep `CLIMBIQ_SPEC.md` and this `todo.md` at root.
+- [x] **M0.2** Root `.gitignore` covering `.env*` everywhere, `node_modules`, Expo artifacts, Python caches. **Must be in the first commit** (§13).
+- [~] **M0.3** TypeScript strict config for `/mobile`, `/backend`, `/shared`; shared lint config (eslint + prettier).
+> STATUS: strict TS + prettier done everywhere; eslint currently mobile-only (`expo lint`). Backend/shared eslint added when service code lands (M3.1).
+- [~] **M0.4** CI workflow: typecheck + lint on all TS packages + migration check (migrations apply cleanly to a fresh DB) (§12.1).
+> STATUS: `.github/workflows/ci.yml` written (GitHub chosen by owner 2026-07-13); unverified until the GitHub remote exists and first push runs it.
 
 ### M0.B — Supabase foundation
-- [ ] **M0.5** Create Supabase project; enable auth providers: Google + email/password (§7.1). *(Requires owner: Google OAuth client credentials — flag when reached.)*
-- [ ] **M0.6** Migration 0001: `profiles` table per §9 schema, with RLS (owner full access on own row; all authenticated users can SELECT profiles for username search).
-- [ ] **M0.7** Migrations live only in `backend/supabase/migrations/` — never dashboard-edited (§7.1). Document the `supabase db push`/reset workflow in `backend/README.md`.
+- [~] **M0.5** Create Supabase project; enable auth providers: Google + email/password (§7.1). *(Requires owner: Google OAuth client credentials — flag when reached.)*
+> STATUS: waiting on owner — setup instructions given 2026-07-13; owner will paste back project URL + anon key.
+- [x] **M0.6** Migration 0001: `profiles` table per §9 schema, with RLS (owner full access on own row; all authenticated users can SELECT profiles for username search). (Applied to remote once M0.5 is done.)
+- [x] **M0.7** Migrations live only in `backend/supabase/migrations/` — never dashboard-edited (§7.1). Document the `supabase db push`/reset workflow in `backend/README.md`.
 
 ### M0.C — Expo app shell + auth
-- [ ] **M0.8** Scaffold Expo app in `/mobile`: current Expo SDK, TypeScript strict, expo-router, tab navigator with 5 tabs: Home · Climbs · Analyze · Feed · Profile (§6). Tabs may be empty screens — but per §6 rules, no dead placeholder buttons inside them.
-- [ ] **M0.9** Install core deps: `@supabase/supabase-js`, TanStack Query; set up Supabase client + session persistence + auth context/hook.
-- [ ] **M0.10** Auth screens: Google sign-in button + email/password sign-up/sign-in via Supabase Auth (§6 Onboarding).
-- [ ] **M0.11** First-login onboarding: username (required, unique) + optional avatar → writes `profiles` row.
-- [ ] **M0.12** Services/hooks layer convention established: no business logic in screen components (§6 rules); `/shared` imported via workspace package.
+- [x] **M0.8** Scaffold Expo app in `/mobile`: current Expo SDK (57), TypeScript strict, expo-router, tab navigator with 5 tabs: Home · Climbs · Analyze · Feed · Profile (§6). Tabs may be empty screens — but per §6 rules, no dead placeholder buttons inside them.
+- [x] **M0.9** Install core deps: `@supabase/supabase-js`, TanStack Query; set up Supabase client + session persistence + auth context/hook.
+- [~] **M0.10** Auth screens: Google sign-in button + email/password sign-up/sign-in via Supabase Auth (§6 Onboarding).
+> STATUS: screens + PKCE Google flow implemented; untestable until M0.5 (live Supabase project) — verify both providers end-to-end then.
+- [~] **M0.11** First-login onboarding: username (required, unique) + optional avatar → writes `profiles` row.
+> STATUS: username flow implemented; optional avatar deferred (needs a Supabase Storage bucket for uploads) — add avatar picking during M0 wrap-up or with Profile polish.
+- [x] **M0.12** Services/hooks layer convention established: no business logic in screen components (§6 rules); `/shared` imported via workspace package.
 
 ---
 
