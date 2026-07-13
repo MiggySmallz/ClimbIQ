@@ -74,13 +74,14 @@
 - [x] **M2.8** Temporal smoothing on keypoints: One-Euro or 5-frame median (§8.1). (5-frame centered median over detected frames in `pose.smooth_keypoints`; undetected frames pass through.)
 
 ### M2.C — Features, rules, scores
-- [ ] **M2.9** Feature extraction from 2D keypoints (§8.1) — **all thresholds normalized to body scale (e.g. torso length in px), never absolute units; baselines from percentiles over a time window, never a single frame** (§3):
+- [x] **M2.9** Feature extraction from 2D keypoints (§8.1) — **all thresholds normalized to body scale (e.g. torso length in px), never absolute units; baselines from percentiles over a time window, never a single frame** (§3):
   - grip classification via PIP/DIP finger angles (crimp/open-hand/sloper)
   - full-crimp injury risk via DIP hyperextension
   - foot contact class via heel–toe axis angle (heel-hook/toe-hook/smear/edge)
   - elbow angles / bent-arm hang detection
   - barn-door via lateral hip travel
   - hip-drop vs baseline = 90th-percentile hip height over first 2 s of detected climbing (never frame 0)
+> STATUS: `src/features.py` — per-frame features + 2s-window hip baseline, output sanity-verified on all 3 test videos. Owner decision 2026-07-13 (recorded in spec §8.1): hand/finger features are **secondary** — gated at 0.5 kp-confidence with all finger joints required, ranked below body-level features; sloper class dropped for v1 (2D projection can't see it reliably). Barn-door here = per-frame hip x only; the short-window oscillation rule lands in M2.10 (test video 1 is a traverse — total lateral travel is NOT the signal). Thresholds are named constants, beta — tune in M2.19.
 - [ ] **M2.10** Rule-based issue detection → ranked issues with severity, evidence text, time segments. Rules decide *what* was detected; LLM never does (§3).
 - [ ] **M2.11** Scores (per-category 0–100 + overall) + grade estimate: transparent heuristic from issue counts/severities, labeled "beta" (§8.1, §14.1).
 

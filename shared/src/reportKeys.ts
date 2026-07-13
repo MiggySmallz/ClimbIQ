@@ -12,7 +12,8 @@ export const ISSUE_KEYS = [
   'barn_door',
   // Hip height drops below the 90th-percentile baseline (first 2s of detected climbing).
   'hip_drop',
-  // Elbow angle stays extended (near-straight) through a hang instead of engaging.
+  // Elbow stays flexed through a static hang (wasted energy) instead of a
+  // straight-arm skeleton hang.
   'bent_arm_hang',
   // DIP hyperextension on a held hold — full-crimp injury risk.
   'full_crimp_risk',

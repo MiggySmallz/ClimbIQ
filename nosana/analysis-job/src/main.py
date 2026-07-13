@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from artifacts import fetch, put
+from features import ClimbFeatures, extract_features
 from job_env import JobEnv, JobEnvError, load_job_env
 from pose import PoseEngine, PoseFrame, smooth_keypoints
 from video_decode import sample_frames
@@ -62,8 +63,42 @@ def run_pipeline(env: JobEnv, work_dir: Path) -> None:
     if debug_dir:
         dump_debug_frames(video_path, pose_frames, env.params.sample_fps, Path(debug_dir))
 
-    # Features, LLM, render, upload stages land in M2.9–M2.18.
-    raise StageError('features', 'pipeline not implemented past pose yet')
+    try:
+        climb = extract_features(pose_frames)
+    except Exception as e:
+        raise StageError('features', f'feature extraction failed: {e}') from e
+    print_feature_stats(climb)
+
+    # Rule-based issue detection, scores, LLM, render, upload land in M2.10–M2.18.
+    raise StageError('features', 'pipeline not implemented past feature extraction yet')
+
+
+def print_feature_stats(climb: ClimbFeatures) -> None:
+    import numpy as np
+
+    fs = [f for f in climb.frames if f.detected]
+    elbows = [a for f in fs for a in (f.elbow_angle_l, f.elbow_angle_r) if a is not None]
+    feet = [a for f in fs for a in (f.foot_axis_deg_l, f.foot_axis_deg_r) if a is not None]
+    grips = [g for f in fs for g in (f.grip_l, f.grip_r) if g is not None]
+    hips_x = [f.hip_x / climb.median_torso for f in fs if f.hip_x is not None]
+    hips_h = [f.hip_height / climb.median_torso for f in fs if f.hip_height is not None]
+    hooks = sum(1 for f in fs if f.heel_hook_l or f.heel_hook_r)
+    risks = sum(1 for f in fs if f.crimp_risk_l or f.crimp_risk_r)
+    print(
+        f'features: {len(fs)} detected frames, median torso {climb.median_torso:.0f}px\n'
+        f'  elbow angles: p10={np.percentile(elbows, 10):.0f} '
+        f'median={np.median(elbows):.0f} p90={np.percentile(elbows, 90):.0f} deg '
+        f'(n={len(elbows)})\n'
+        f'  foot axis: median={np.median(feet):.0f} deg (n={len(feet)}), '
+        f'heel-hook frames={hooks}\n'
+        f'  grip classified on {len(grips)}/{2 * len(fs)} hand-frames '
+        f'({100 * len(grips) // (2 * len(fs))}%): '
+        f'{ {g: grips.count(g) for g in set(grips)} or "none confident"}, '
+        f'crimp-risk frames={risks}\n'
+        f'  hip x-travel: {max(hips_x) - min(hips_x):.2f} torsos; '
+        f'hip height range: {max(hips_h) - min(hips_h):.2f} torsos; '
+        f'baseline={climb.hip_baseline / climb.median_torso:.2f}'
+    )
 
 
 def dump_debug_frames(
