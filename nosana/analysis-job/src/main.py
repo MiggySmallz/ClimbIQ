@@ -9,8 +9,10 @@ import time
 from pathlib import Path
 
 from artifacts import fetch, put
+from evidence import extract_evidence
 from features import ClimbFeatures, extract_features
 from job_env import JobEnv, JobEnvError, load_job_env
+from llm_context import build_llm_context
 from pose import PoseEngine, PoseFrame, smooth_keypoints
 from rules import RuleResult, detect_issues
 from scoring import compute_scores, estimate_grade
@@ -77,8 +79,30 @@ def run_pipeline(env: JobEnv, work_dir: Path) -> None:
     print_feature_stats(climb)
     print_rule_results(rule_result, scores, grade)
 
-    # LLM verification/coaching, overlay render, artifact upload land in M2.12–M2.18.
-    raise StageError('llm', 'pipeline not implemented past rules/scores yet')
+    try:
+        context = build_llm_context(
+            climb, rule_result, scores, env.params, frames_analyzed=len(pose_frames)
+        )
+        images = extract_evidence(
+            video_path, pose_frames, rule_result.issues,
+            env.params.sample_fps, work_dir / 'evidence',
+        )
+    except Exception as e:
+        raise StageError('features', f'evidence extraction failed: {e}') from e
+    print(f'evidence: {len(images)} images '
+          f'({sum(1 for i in images if i.kind == "issue")} issue strips, '
+          f'{sum(1 for i in images if i.kind == "context")} context), '
+          f'llm_context {len(json.dumps(context))} bytes')
+    if debug_dir:
+        import shutil
+        for img in images:
+            shutil.copy(img.path, Path(debug_dir) / img.path.name)
+        (Path(debug_dir) / 'llm_context.json').write_text(
+            json.dumps(context, indent=2), encoding='utf-8'
+        )
+
+    # LLM call, overlay render, artifact upload land in M2.12/M2.15–M2.18.
+    raise StageError('llm', 'pipeline not implemented past evidence extraction yet')
 
 
 def print_rule_results(result: RuleResult, scores: dict, grade: str | None) -> None:

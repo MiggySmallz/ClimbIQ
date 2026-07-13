@@ -89,8 +89,8 @@
 
 ### M2.D — LLM stage
 - [ ] **M2.12** Bake Qwen3.6-27B GGUF Q4_K_M (~17 GB) + vision projector into image; serve via llama.cpp (§2, §8.1). Verify VRAM budget fits 24 GB: pose ONNX ~2 GB + Qwen ~17 GB + vision/KV overhead.
-- [ ] **M2.13** Build `llm_context` (compact structured summary: duration, frames analyzed, ranked issues + evidence + timestamps, positives, grip distribution — never bulk keypoints) (§3).
-- [ ] **M2.14** Evidence image extraction: per top issue, 3–5 bbox-cropped frames spanning the segment composed into one labeled strip/grid; + 2–3 whole-climb context frames; hard cap on total images for VRAM/token budget (§8.1).
+- [x] **M2.13** Build `llm_context` (compact structured summary: duration, frames analyzed, ranked issues + evidence + timestamps, positives, grip distribution — never bulk keypoints) (§3). (`src/llm_context.py` — ~1 KB JSON verified on test video.)
+- [x] **M2.14** Evidence image extraction: per top issue, 3–5 bbox-cropped frames spanning the segment composed into one labeled strip/grid; + 2–3 whole-climb context frames; hard cap on total images for VRAM/token budget (§8.1). (`src/evidence.py` — 3 strips × 4 tiles + 2 context frames = hard cap 5 images, one streaming decode pass; labeled strips visually verified.)
 - [ ] **M2.15** Coaching prompt template (versioned file in `/nosana/analysis-job`, §13): one Qwen call, temperature ~0.4, max ~800 tokens. Model returns per-issue `verified: true/false`, judgment additions (body-to-wall distance, dynamic vs static), `coaching_text`, per-issue `drill` strings (§8.1). Structured-output parsing + validation.
 - [ ] **M2.16** Overlay clip render: skeleton on sampled frames → 720p H.264 via ffmpeg (§8.1).
 - [ ] **M2.17** Timeline JSON artifact: per-frame series (hip height, elbow angles, etc.) for the biomechanics chart (§10 note: heavy per-frame data lives in R2).
