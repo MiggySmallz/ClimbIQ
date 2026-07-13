@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/lib/auth-context';
 
 export default function HomeScreen() {
@@ -7,14 +8,16 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.greeting}>Welcome, {profile?.username} 🧗</Text>
-      <Text style={styles.hint}>Your climbing stats will appear here once you log climbs.</Text>
+      <ThemedText style={styles.greeting}>Welcome, {profile?.username} 🧗</ThemedText>
+      <ThemedText themeColor="textSecondary" style={styles.hint}>
+        Your climbing stats will appear here once you log climbs.
+      </ThemedText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
-  greeting: { fontSize: 22, fontWeight: '600' },
-  hint: { fontSize: 15, color: '#60646C', textAlign: 'center' },
+  greeting: { fontSize: 22, lineHeight: 28, fontWeight: '600' },
+  hint: { fontSize: 15, textAlign: 'center' },
 });

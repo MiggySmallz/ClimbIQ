@@ -10,6 +10,7 @@ export const authStyles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
+    lineHeight: 40,
     fontWeight: '700',
     textAlign: 'center',
   },

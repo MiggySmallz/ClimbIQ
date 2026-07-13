@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 
@@ -20,8 +21,10 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.username}>@{profile?.username}</Text>
-      <Text style={styles.email}>{session?.user.email}</Text>
+      <ThemedText style={styles.username}>@{profile?.username}</ThemedText>
+      <ThemedText themeColor="textSecondary" style={styles.email}>
+        {session?.user.email}
+      </ThemedText>
 
       <Pressable style={styles.signOutButton} onPress={handleSignOut} disabled={busy}>
         {busy ? <ActivityIndicator /> : <Text style={styles.signOutText}>Sign out</Text>}
@@ -32,8 +35,8 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', paddingTop: 48, padding: 24, gap: 8 },
-  username: { fontSize: 24, fontWeight: '700' },
-  email: { fontSize: 15, color: '#60646C' },
+  username: { fontSize: 24, lineHeight: 30, fontWeight: '700' },
+  email: { fontSize: 15 },
   signOutButton: {
     marginTop: 32,
     borderWidth: 1,

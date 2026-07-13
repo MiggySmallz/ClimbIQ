@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { authStyles as s } from '@/components/auth-styles';
+import { ThemedText } from '@/components/themed-text';
 import { signInWithGoogle } from '@/lib/google-auth';
 import { supabase } from '@/lib/supabase';
 
@@ -54,8 +55,10 @@ export default function SignInScreen() {
     <KeyboardAvoidingView
       style={s.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Text style={s.title}>ClimbIQ</Text>
-      <Text style={s.subtitle}>Sign in to continue</Text>
+      <ThemedText style={s.title}>ClimbIQ</ThemedText>
+      <ThemedText themeColor="textSecondary" style={s.subtitle}>
+        Sign in to continue
+      </ThemedText>
 
       <TextInput
         style={s.input}

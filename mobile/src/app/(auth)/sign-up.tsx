@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { authStyles as s } from '@/components/auth-styles';
+import { ThemedText } from '@/components/themed-text';
 import { supabase } from '@/lib/supabase';
 
 export default function SignUpScreen() {
@@ -58,7 +59,7 @@ export default function SignUpScreen() {
     <KeyboardAvoidingView
       style={s.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Text style={s.title}>Create account</Text>
+      <ThemedText style={s.title}>Create account</ThemedText>
 
       <TextInput
         style={s.input}

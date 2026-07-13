@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { authStyles as s } from '@/components/auth-styles';
+import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/lib/auth-context';
 import { createProfile, USERNAME_PATTERN } from '@/services/profiles';
 
@@ -50,8 +51,10 @@ export default function OnboardingScreen() {
     <KeyboardAvoidingView
       style={s.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Text style={s.title}>Pick a username</Text>
-      <Text style={s.subtitle}>This is how friends will find you</Text>
+      <ThemedText style={s.title}>Pick a username</ThemedText>
+      <ThemedText themeColor="textSecondary" style={s.subtitle}>
+        This is how friends will find you
+      </ThemedText>
 
       <TextInput
         style={s.input}
