@@ -8,20 +8,33 @@ import {
   Pressable,
   Text,
   TextInput,
+  View,
 } from 'react-native';
 
 import { authStyles as s } from '@/components/auth-styles';
+import { Avatar } from '@/components/avatar';
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/lib/auth-context';
-import { createProfile, USERNAME_PATTERN } from '@/services/profiles';
+import { pickAvatarImage } from '@/lib/image';
+import { createProfile, updateProfile, uploadAvatar, USERNAME_PATTERN } from '@/services/profiles';
 
 export default function OnboardingScreen() {
   const { session, profile, refreshProfile } = useAuth();
   const [username, setUsername] = useState('');
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   if (!session) return <Redirect href="/sign-in" />;
   if (profile) return <Redirect href="/" />;
+
+  async function handlePickAvatar() {
+    try {
+      const uri = await pickAvatarImage();
+      if (uri) setAvatarUri(uri);
+    } catch {
+      Alert.alert('Photo', 'Could not open the photo library.');
+    }
+  }
 
   async function handleSubmit() {
     if (!session) return;
@@ -32,7 +45,16 @@ export default function OnboardingScreen() {
     }
     setBusy(true);
     try {
+      // Profile first — the avatar is optional and must never block onboarding.
       await createProfile(session.user.id, name);
+      if (avatarUri) {
+        try {
+          const url = await uploadAvatar(session.user.id, avatarUri);
+          await updateProfile(session.user.id, { avatar_url: url });
+        } catch {
+          Alert.alert('Avatar', 'Photo upload failed — you can add one later from Profile.');
+        }
+      }
       await refreshProfile(); // tabs guard now lets us through
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
@@ -55,6 +77,15 @@ export default function OnboardingScreen() {
       <ThemedText themeColor="textSecondary" style={s.subtitle}>
         This is how friends will find you
       </ThemedText>
+
+      <View style={{ alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Pressable onPress={handlePickAvatar} disabled={busy}>
+          <Avatar url={avatarUri} username={username} size={96} />
+        </Pressable>
+        <ThemedText type="small" themeColor="textSecondary">
+          {avatarUri ? 'Tap to change photo' : 'Add a photo (optional)'}
+        </ThemedText>
+      </View>
 
       <TextInput
         style={s.input}

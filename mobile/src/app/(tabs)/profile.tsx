@@ -1,13 +1,35 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/avatar';
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/lib/auth-context';
+import { pickAvatarImage } from '@/lib/image';
 import { supabase } from '@/lib/supabase';
+import { removeAvatarByUrl, updateProfile, uploadAvatar } from '@/services/profiles';
 
 export default function ProfileScreen() {
-  const { session, profile } = useAuth();
+  const { session, profile, refreshProfile } = useAuth();
   const [busy, setBusy] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+
+  async function handleChangeAvatar() {
+    if (!session || avatarBusy) return;
+    try {
+      const uri = await pickAvatarImage();
+      if (!uri) return;
+      setAvatarBusy(true);
+      const oldUrl = profile?.avatar_url ?? null;
+      const url = await uploadAvatar(session.user.id, uri);
+      await updateProfile(session.user.id, { avatar_url: url });
+      if (oldUrl) await removeAvatarByUrl(oldUrl);
+      await refreshProfile();
+    } catch {
+      Alert.alert('Avatar', 'Could not update your photo. Try again.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   async function handleSignOut() {
     setBusy(true);
@@ -21,6 +43,19 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
+      <Pressable onPress={handleChangeAvatar} style={styles.avatarWrap}>
+        {avatarBusy ? (
+          <View style={styles.avatarBusy}>
+            <ActivityIndicator />
+          </View>
+        ) : (
+          <Avatar url={profile?.avatar_url ?? null} username={profile?.username} size={96} />
+        )}
+        <ThemedText type="small" themeColor="textSecondary">
+          {profile?.avatar_url ? 'Change photo' : 'Add photo'}
+        </ThemedText>
+      </Pressable>
+
       <ThemedText style={styles.username}>@{profile?.username}</ThemedText>
       <ThemedText themeColor="textSecondary" style={styles.email}>
         {session?.user.email}
@@ -35,6 +70,8 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', paddingTop: 48, padding: 24, gap: 8 },
+  avatarWrap: { alignItems: 'center', gap: 8, marginBottom: 8 },
+  avatarBusy: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
   username: { fontSize: 24, lineHeight: 30, fontWeight: '700' },
   email: { fontSize: 15 },
   signOutButton: {
