@@ -37,6 +37,12 @@ RUN python3.11 -m pip install --no-cache-dir "onnxruntime-gpu[cuda,cudnn]==1.26.
     && python3.11 -m pip install --no-cache-dir --no-deps rtmlib==0.0.15 \
     && python3.11 -m pip install --no-cache-dir -r requirements.txt
 
+# Bake pose models into the image (spec §8.1: never downloaded at job
+# runtime). Separate layer, before src/, so pipeline-code changes don't
+# re-download ~600 MB of weights.
+COPY scripts/bake_models.py scripts/
+RUN python3.11 scripts/bake_models.py
+
 COPY src/ src/
 
 ENTRYPOINT ["python3.11", "src/main.py"]
