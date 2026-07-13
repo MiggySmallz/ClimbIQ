@@ -2,6 +2,25 @@
   "name": "@climbiq/backend",
   "version": "0.1.0",
   "private": true,
-  "description": "ClimbIQ orchestrator service (Fastify) — service code lands in M3; this package currently holds Supabase migrations.",
-  "scripts": {}
+  "description": "ClimbIQ orchestrator service (Fastify) — presigned URLs, Nosana jobs, report ingestion, push notifications.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@climbiq/shared": "*",
+    "@supabase/supabase-js": "^2.110.3",
+    "fastify": "^5.7.4",
+    "fastify-plugin": "^5.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "~5.8.3"
+  },
+  "engines": {
+    "node": ">=20.18"
+  }
 }

@@ -135,6 +135,7 @@ climbiq/
 - All tables have RLS. Baseline policies: owner full access on own rows; friends can `SELECT` reports with `visibility='friends'` via the `friendships` join; `analysis_jobs` readable by video owner only.
 - Realtime enabled on `analysis_jobs` (status) and `reports` (feed inserts).
 - Schema managed exclusively through SQL migration files in `backend/supabase/migrations` — never hand-edited in the dashboard.
+- Profile avatars live in a public Supabase Storage bucket `avatars` (added 2026-07-13 for M0.11): public read, writes owner-scoped by path prefix `{user_id}/…`, 2 MB / image-mime limits enforced by the bucket. Bucket + storage RLS policies are created by migration like everything else. (Videos/report artifacts stay on R2 — the bucket is avatars only.)
 
 ### 7.2 Orchestrator (Fastify, TypeScript)
 Endpoints (all JWT-authenticated):

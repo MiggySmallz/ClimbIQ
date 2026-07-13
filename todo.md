@@ -21,8 +21,7 @@
 ### M0.A — Repo & tooling
 - [x] **M0.1** Initialize git repo + monorepo layout per §5: `/mobile`, `/backend` (with `/backend/supabase`), `/nosana/analysis-job`, `/nosana/job-definition.json`, `/shared`. Keep `CLIMBIQ_SPEC.md` and this `todo.md` at root.
 - [x] **M0.2** Root `.gitignore` covering `.env*` everywhere, `node_modules`, Expo artifacts, Python caches. **Must be in the first commit** (§13).
-- [~] **M0.3** TypeScript strict config for `/mobile`, `/backend`, `/shared`; shared lint config (eslint + prettier).
-> STATUS: strict TS + prettier done everywhere; eslint currently mobile-only (`expo lint`). Backend/shared eslint added when service code lands (M3.1).
+- [x] **M0.3** TypeScript strict config for `/mobile`, `/backend`, `/shared`; shared lint config (eslint + prettier). (Completed 2026-07-13 with M3.1: root `eslint.config.mjs` (typescript-eslint flat config) covers backend+shared; mobile keeps `expo lint`.)
 - [x] **M0.4** CI workflow: typecheck + lint on all TS packages + migration check (migrations apply cleanly to a fresh DB) (§12.1). (Pushed to `origin/main` 2026-07-13; typecheck/lint verified locally and migration-check replicated locally — both migrations apply cleanly to a fresh Postgres from zero.)
 
 ### M0.B — Supabase foundation
@@ -35,7 +34,7 @@
 - [x] **M0.9** Install core deps: `@supabase/supabase-js`, TanStack Query; set up Supabase client + session persistence + auth context/hook.
 - [x] **M0.10** Auth screens: Google sign-in button + email/password sign-up/sign-in via Supabase Auth (§6 Onboarding). (Verified on device 2026-07-13: email + Google both work; `auth/callback` deep-link route added for Android; dark-mode text fixed.)
 - [~] **M0.11** First-login onboarding: username (required, unique) + optional avatar → writes `profiles` row.
-> STATUS: username flow implemented; optional avatar deferred (needs a Supabase Storage bucket for uploads) — add avatar picking during M0 wrap-up or with Profile polish.
+> STATUS: username flow verified on device. Avatar implemented 2026-07-13: public `avatars` Storage bucket + owner-scoped storage RLS (migration 20260713000003, applied to remote), square-crop picker + 512px JPEG resize, upload in onboarding and change-photo on Profile tab. Needs device verification (bundle with M1.6 pass).
 - [x] **M0.12** Services/hooks layer convention established: no business logic in screen components (§6 rules); `/shared` imported via workspace package.
 
 ---
@@ -88,8 +87,9 @@
 > STATUS: `src/scoring.py` — per-category penalties by severity; overall weights grip at 0.1 (owner de-emphasis). Grade estimate v1 anchors on declared_grade or abstains (technique features can't derive route grade); LLM stage may refine (M2.15), calibration stays §14.1's open question.
 
 ### M2.D — LLM stage
-- [~] **M2.12** Bake Qwen3.6-27B GGUF Q4_K_M (~17 GB) + vision projector into image; serve via llama.cpp (§2, §8.1). Verify VRAM budget fits 24 GB: pose ONNX ~2 GB + Qwen ~17 GB + vision/KV overhead.
-> STATUS: Dockerfile llama-build stage written (llama.cpp pinned `b9987`, CUDA arches 80/86/89, static llama-server) and compiling; weights (`unsloth/Qwen3.6-27B-GGUF` Q4_K_M 16.8 GB + mmproj-F16 0.93 GB) downloading to gitignored `models/`. Remaining: finish download, full image build, VRAM check on owner's 3090 (24 GB — matches target). Pose ONNX sessions are freed before the LLM starts (engine scoped to run_pose_stage), so peak VRAM is pose OR llm, not both.
+- [!] **M2.12** Bake Qwen3.6-27B GGUF Q4_K_M (~17 GB) + vision projector into image; serve via llama.cpp (§2, §8.1). Verify VRAM budget fits 24 GB: pose ONNX ~2 GB + Qwen ~17 GB + vision/KV overhead.
+> BLOCKED: owner's WSL2/Docker Desktop backend stopped responding 2026-07-13 (Docker API 500s) under the combined load of the weights download + `docker build --target llama-build` running at once — stopped both to avoid making it worse, needs a WSL/Docker restart on the owner's machine before resuming.
+> STATUS so far: Dockerfile llama-build stage written (llama.cpp pinned `b9987`, CUDA arches 80/86/89, static llama-server). Weights partially downloaded to gitignored `models/` (`Qwen3.6-27B-Q4_K_M.gguf` ~5.6/16.8 GB, resumable via `curl -C -`; mmproj-F16 0.93 GB not started). Remaining once WSL is back: resume download, finish the llama-build image, VRAM check on owner's 3090 (24 GB — matches target). Pose ONNX sessions are freed before the LLM starts (engine scoped to run_pose_stage), so peak VRAM is pose OR llm, not both.
 - [x] **M2.13** Build `llm_context` (compact structured summary: duration, frames analyzed, ranked issues + evidence + timestamps, positives, grip distribution — never bulk keypoints) (§3). (`src/llm_context.py` — ~1 KB JSON verified on test video.)
 - [x] **M2.14** Evidence image extraction: per top issue, 3–5 bbox-cropped frames spanning the segment composed into one labeled strip/grid; + 2–3 whole-climb context frames; hard cap on total images for VRAM/token budget (§8.1). (`src/evidence.py` — 3 strips × 4 tiles + 2 context frames = hard cap 5 images, one streaming decode pass; labeled strips visually verified.)
 - [~] **M2.15** Coaching prompt template (versioned file in `/nosana/analysis-job`, §13): one Qwen call, temperature ~0.4, max ~800 tokens. Model returns per-issue `verified: true/false`, judgment additions (body-to-wall distance, dynamic vs static), `coaching_text`, per-issue `drill` strings (§8.1). Structured-output parsing + validation.
@@ -98,6 +98,7 @@
 - [x] **M2.17** Timeline JSON artifact: per-frame series (hip height, elbow angles, etc.) for the biomechanics chart (§10 note: heavy per-frame data lives in R2). (`src/timeline.py` — body-scale-normalized series + hip baseline, ~7 KB for a 56 s climb.)
 - [x] **M2.18** Assemble + PUT the three artifacts; exit 0. On any failure: PUT structured error JSON to `RESULT_PUT_URL`, exit non-zero (§8.1). (`assemble_result` in `src/main.py`; verified end-to-end with SKIP_LLM=1 — result.json validates against the shared report schema, all three artifacts PUT; error path verified earlier in M2.5.)
 - [ ] **M2.19** End-to-end local validation: run container on ≥2 real climbing sample videos → `result.json` validates against `/shared` JSON Schema; visually sanity-check overlay + issue timestamps.
+> NOTE: blocked on M2.12 (real LLM output) for the full run; the SKIP_LLM=1 path already validated result.json against the schema end-to-end (see M2.18), so what's left here once M2.12 unblocks is the real-model pass + overlay/timestamp sanity check.
 
 ---
 
@@ -106,8 +107,8 @@
 **Goal:** phone → upload → GPU job → report row → push notification, end to end.
 
 ### M3.A — Orchestrator service
-- [ ] **M3.1** Scaffold Fastify TS service in `/backend`: env-only config (missing required secret fails startup loudly, §13), pino structured logs, Supabase JWT verification middleware on every route (§7.2). Never return stack traces/internal errors to clients (§3).
-- [ ] **M3.2** Migration 0003: `videos` (+ `video_status` enum + indexes incl. partial on `expires_at`), `analysis_jobs` (+ `job_status` enum + indexes), `push_tokens` per §9. RLS: videos owner-only; `analysis_jobs` readable by video owner only (§7.1).
+- [x] **M3.1** Scaffold Fastify TS service in `/backend`: env-only config (missing required secret fails startup loudly, §13), pino structured logs, Supabase JWT verification middleware on every route (§7.2). Never return stack traces/internal errors to clients (§3). (Done 2026-07-13: `src/config.ts`/`server.ts`/`plugins/auth.ts`; JWT verified via `auth.getUser` — swap to local JWKS if latency ever matters; generic 5xx bodies; `GET /health` public + `GET /me` authenticated; smoke-tested: missing env fails startup, /health 200, /me 401 without/with bad token. Backend `.env` needs the service-role key from the dashboard.)
+- [x] **M3.2** Migration 0003: `videos` (+ `video_status` enum + indexes incl. partial on `expires_at`), `analysis_jobs` (+ `job_status` enum + indexes), `push_tokens` per §9. RLS: videos owner-only; `analysis_jobs` readable by video owner only (§7.1). (Migration `20260713000004` applied to remote 2026-07-13; owner writes limited to `videos` UPDATE (climb re-link, M4.8) — inserts/status changes are orchestrator-only via service role; shared row types added to `shared/src/db.ts`.)
 - [ ] **M3.3** R2 bucket + client: presigned PUT/GET generation. Key layout per §9: `videos/{user_id}/{video_id}.mp4`, `reports/{report_id}/{overlay.mp4,timeline.json,result.json}`. Sign `Content-Length` into presigned PUTs; ≤1 h expiry on job-facing URLs (§8.2 security). *(Requires owner: Cloudflare R2 account + bucket.)*
 - [ ] **M3.4** `POST /videos`: validate metadata (duration ≤90 s, size caps), sanitize filename (§3), create `videos` row with `expires_at = created_at + 30 days`, return presigned PUT URL (§7.2).
 - [ ] **M3.5** `POST /videos/:id/analyze`: create `analysis_jobs` row (`queued`) → post Nosana job → store `nosana_job_id`, status `posted` (§7.2).
@@ -181,6 +182,7 @@
 ## Owner-action checklist (things only the project owner can provide — flag when a task hits one)
 
 - [ ] Supabase project created + Google OAuth credentials (needed by M0.5)
+- [ ] Supabase service-role key copied into `backend/.env` (dashboard → Settings → API; needed to run the orchestrator, M3.4+)
 - [ ] Cloudflare R2 account + bucket + keys (needed by M3.3)
 - [ ] Nosana dashboard API key + Credits funded (needed by M3.6)
 - [ ] Expo push credentials (needed by M3.10)

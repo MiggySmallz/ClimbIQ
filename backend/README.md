@@ -1,7 +1,19 @@
 # ClimbIQ backend
 
-Orchestrator service (Fastify + `@nosana/kit`) — service code lands in milestone M3.
-For now this package holds the Supabase configuration and SQL migrations.
+Orchestrator service (Fastify) — presigned R2 URLs, Nosana job posting/polling,
+report ingestion, push notifications (spec §7.2). Also holds the Supabase
+configuration and SQL migrations.
+
+## Running the orchestrator
+
+```sh
+cp .env.example .env   # fill in SUPABASE_SERVICE_ROLE_KEY (dashboard → Settings → API)
+npm run dev            # tsx watch, from /backend
+```
+
+Every route requires a Supabase user JWT (`Authorization: Bearer <access_token>`)
+except `GET /health`. `GET /me` echoes the authenticated user id — handy for
+checking a token. Config is env-only; missing required vars fail startup.
 
 ## Supabase migration workflow (spec §7.1 — read before touching the schema)
 

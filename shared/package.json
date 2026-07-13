@@ -6,7 +6,8 @@
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "validate-schema": "node scripts/validate-schema.mjs"
+    "validate-schema": "node scripts/validate-schema.mjs",
+    "lint": "eslint src scripts"
   },
   "devDependencies": {
     "ajv": "^8.20.0",
