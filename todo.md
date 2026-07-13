@@ -23,8 +23,7 @@
 - [x] **M0.2** Root `.gitignore` covering `.env*` everywhere, `node_modules`, Expo artifacts, Python caches. **Must be in the first commit** (§13).
 - [~] **M0.3** TypeScript strict config for `/mobile`, `/backend`, `/shared`; shared lint config (eslint + prettier).
 > STATUS: strict TS + prettier done everywhere; eslint currently mobile-only (`expo lint`). Backend/shared eslint added when service code lands (M3.1).
-- [~] **M0.4** CI workflow: typecheck + lint on all TS packages + migration check (migrations apply cleanly to a fresh DB) (§12.1).
-> STATUS: `.github/workflows/ci.yml` written (GitHub chosen by owner 2026-07-13); unverified until the GitHub remote exists and first push runs it.
+- [x] **M0.4** CI workflow: typecheck + lint on all TS packages + migration check (migrations apply cleanly to a fresh DB) (§12.1). (Pushed to `origin/main` 2026-07-13; typecheck/lint verified locally and migration-check replicated locally — both migrations apply cleanly to a fresh Postgres from zero.)
 
 ### M0.B — Supabase foundation
 - [x] **M0.5** Create Supabase project; enable auth providers: Google + email/password (§7.1). (Project ref `yvikvvdwxvlpnhvudicy`, linked + migration pushed 2026-07-13.)
@@ -63,11 +62,11 @@
 **Goal:** the full CV+LLM pipeline runs locally in Docker on a sample video and emits a valid `result.json`. **Exit criteria:** `docker run` with env-var contract (§8.1) on a sample climbing video produces `result.json` (schema-valid), `overlay.mp4`, `timeline.json`.
 
 ### M2.A — Contract first
-- [ ] **M2.1** `/shared`: report JSON contract — TS types + JSON Schema for `result.json` per §10 (`version`, `observations[]` with stable `key` enum / `severity` / `evidence` / `segments` / `verified` / `drill`, `positives`, `scores`, `grade_estimate`, `coaching_text`, `llm_model`, `pipeline`). Also define the structured **error JSON** shape for failed jobs (§8.1).
-- [ ] **M2.2** Define the initial `observations[].key` vocabulary (stable enum, additive-only per §10): e.g. `barn_door`, `hip_drop`, `bent_arm_hang`, `full_crimp_risk`, `poor_foot_contact`, + positives like `heel_hook`. Document each key's detection rule.
+- [x] **M2.1** `/shared`: report JSON contract — TS types + JSON Schema for `result.json` per §10 (`version`, `observations[]` with stable `key` enum / `severity` / `evidence` / `segments` / `verified` / `drill`, `positives`, `scores`, `grade_estimate`, `coaching_text`, `llm_model`, `pipeline`). Also define the structured **error JSON** shape for failed jobs (§8.1). (`shared/src/report.ts` + `report.schema.json`/`error.schema.json`; validated against fixtures via `shared/scripts/validate-schema.mjs` — 8/8 checks pass; spec §10 updated with the error contract.)
+- [x] **M2.2** Define the initial `observations[].key` vocabulary (stable enum, additive-only per §10): e.g. `barn_door`, `hip_drop`, `bent_arm_hang`, `full_crimp_risk`, `poor_foot_contact`, + positives like `heel_hook`. Document each key's detection rule. (`shared/src/reportKeys.ts`, one-line detection rule per key; also recorded in spec §10.)
 
 ### M2.B — Container & pose
-- [ ] **M2.3** Dockerfile: CUDA runtime base, Python 3.11, **no PyTorch** (§8.1). rtmlib + `onnxruntime-gpu` + ffmpeg. Third-party model code = pinned dep or build-stage clone, never copied-in source (§3).
+- [x] **M2.3** Dockerfile: CUDA runtime base, Python 3.11, **no PyTorch** (§8.1). rtmlib + `onnxruntime-gpu` + ffmpeg. Third-party model code = pinned dep or build-stage clone, never copied-in source (§3). (`nvidia/cuda:12.4.1-runtime-ubuntu22.04` + deadsnakes 3.11; onnxruntime-gpu 1.26 `[cuda,cudnn]`, rtmlib 0.0.15 pinned `--no-deps` to avoid the CPU-onnxruntime/opencv clobber; built + run verified locally with `--gpus all`: CUDAExecutionProvider available, all imports pass.)
 - [ ] **M2.4** Bake ONNX models into image at build time: YOLOX person detector + RTMW wholebody 133-kpt (DWPose as documented fallback) (§8.1).
 - [ ] **M2.5** Entrypoint reading env-var contract: `VIDEO_URL`, `RESULT_PUT_URL`, `OVERLAY_PUT_URL`, `TIMELINE_PUT_URL`, `JOB_PARAMS` (§8.1). For local dev, support `file://` or local-path equivalents behind the same interface.
 - [ ] **M2.6** Streaming frame decode at ~3 fps sample rate — never buffer whole video in RAM (§3, §8.1). Models loaded once at startup; explicit concurrency cap.

@@ -1,0 +1,6 @@
+# onnxruntime-gpu and rtmlib are installed separately in the Dockerfile — see
+# the comment there for why. Everything else rtmlib/the pipeline needs:
+# numpy 2.5+ requires Python >=3.12; 2.4.6 is the latest for 3.11
+numpy==2.4.6
+opencv-contrib-python-headless==4.13.0.92
+tqdm==4.68.4
