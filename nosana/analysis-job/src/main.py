@@ -13,9 +13,11 @@ from evidence import extract_evidence
 from features import ClimbFeatures, extract_features
 from job_env import JobEnv, JobEnvError, load_job_env
 from llm_context import build_llm_context
+from overlay import render_overlay
 from pose import PoseEngine, PoseFrame, smooth_keypoints
 from rules import RuleResult, detect_issues
 from scoring import compute_scores, estimate_grade
+from timeline import write_timeline
 from video_decode import sample_frames
 
 
@@ -101,8 +103,27 @@ def run_pipeline(env: JobEnv, work_dir: Path) -> None:
             json.dumps(context, indent=2), encoding='utf-8'
         )
 
-    # LLM call, overlay render, artifact upload land in M2.12/M2.15–M2.18.
-    raise StageError('llm', 'pipeline not implemented past evidence extraction yet')
+    # Overlay + timeline are rendered before the LLM stage while it's a stub
+    # so they stay testable; once M2.15 lands, order becomes LLM → render →
+    # PUT all three artifacts together (spec §8.1).
+    try:
+        overlay_path = work_dir / 'overlay.mp4'
+        render_overlay(video_path, pose_frames, env.params.sample_fps, overlay_path)
+        timeline_path = work_dir / 'timeline.json'
+        write_timeline(climb, timeline_path)
+    except Exception as e:
+        raise StageError('render', f'overlay/timeline render failed: {e}') from e
+    print(f'render: overlay {overlay_path.stat().st_size // 1024} KiB, '
+          f'timeline {timeline_path.stat().st_size // 1024} KiB')
+
+    try:
+        put(env.overlay_put_url, overlay_path, 'video/mp4')
+        put(env.timeline_put_url, timeline_path, 'application/json')
+    except Exception as e:
+        raise StageError('upload', f'artifact upload failed: {e}') from e
+
+    # LLM call + result.json assembly land in M2.12/M2.15/M2.18.
+    raise StageError('llm', 'pipeline not implemented past render/upload yet')
 
 
 def print_rule_results(result: RuleResult, scores: dict, grade: str | None) -> None:

@@ -92,8 +92,8 @@
 - [x] **M2.13** Build `llm_context` (compact structured summary: duration, frames analyzed, ranked issues + evidence + timestamps, positives, grip distribution — never bulk keypoints) (§3). (`src/llm_context.py` — ~1 KB JSON verified on test video.)
 - [x] **M2.14** Evidence image extraction: per top issue, 3–5 bbox-cropped frames spanning the segment composed into one labeled strip/grid; + 2–3 whole-climb context frames; hard cap on total images for VRAM/token budget (§8.1). (`src/evidence.py` — 3 strips × 4 tiles + 2 context frames = hard cap 5 images, one streaming decode pass; labeled strips visually verified.)
 - [ ] **M2.15** Coaching prompt template (versioned file in `/nosana/analysis-job`, §13): one Qwen call, temperature ~0.4, max ~800 tokens. Model returns per-issue `verified: true/false`, judgment additions (body-to-wall distance, dynamic vs static), `coaching_text`, per-issue `drill` strings (§8.1). Structured-output parsing + validation.
-- [ ] **M2.16** Overlay clip render: skeleton on sampled frames → 720p H.264 via ffmpeg (§8.1).
-- [ ] **M2.17** Timeline JSON artifact: per-frame series (hip height, elbow angles, etc.) for the biomechanics chart (§10 note: heavy per-frame data lives in R2).
+- [x] **M2.16** Overlay clip render: skeleton on sampled frames → 720p H.264 via ffmpeg (§8.1). (`src/overlay.py` — frames streamed into ffmpeg stdin at sample_fps real-time pacing so clip time == climb time for issue-card seeks; verified 56 s / 169-frame clip, skeleton visually correct.)
+- [x] **M2.17** Timeline JSON artifact: per-frame series (hip height, elbow angles, etc.) for the biomechanics chart (§10 note: heavy per-frame data lives in R2). (`src/timeline.py` — body-scale-normalized series + hip baseline, ~7 KB for a 56 s climb.)
 - [ ] **M2.18** Assemble + PUT the three artifacts; exit 0. On any failure: PUT structured error JSON to `RESULT_PUT_URL`, exit non-zero (§8.1).
 - [ ] **M2.19** End-to-end local validation: run container on ≥2 real climbing sample videos → `result.json` validates against `/shared` JSON Schema; visually sanity-check overlay + issue timestamps.
 
