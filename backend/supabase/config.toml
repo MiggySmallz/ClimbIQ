@@ -1,0 +1,3 @@
+# Minimal Supabase CLI config — used by local dev and the CI migration check.
+# Settings not listed here use CLI defaults.
+project_id = "climbiq"
