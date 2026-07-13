@@ -1,8 +1,26 @@
+# llama.cpp build stage — pinned tag clone per spec §3 (never copied-in
+# source). Server binary only; CUDA arches cover 3090 (86), 4090 (89) and
+# A100 (80) class Nosana nodes.
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS llama-build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git cmake build-essential ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+ARG LLAMA_TAG=b9987
+RUN git clone --depth 1 --branch ${LLAMA_TAG} https://github.com/ggml-org/llama.cpp /llama \
+    && cmake -S /llama -B /llama/build \
+        -DGGML_CUDA=ON \
+        -DGGML_NATIVE=OFF \
+        -DCMAKE_CUDA_ARCHITECTURES="80;86;89" \
+        -DLLAMA_BUILD_SERVER=ON \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DLLAMA_CURL=OFF \
+    && cmake --build /llama/build --config Release -j --target llama-server
+
 # CUDA runtime base, Python 3.11, no PyTorch (spec §8.1) — pose inference is
-# rtmlib (YOLOX + RTMW) on onnxruntime-gpu; the LLM stage (llama.cpp + Qwen
-# GGUF) is baked in later, M2.12. The cudnn variant ships cuDNN 9 system-wide,
-# which ORT's CUDA provider dlopens — the pip nvidia-cudnn wheel lands in
-# site-packages where ORT does not look on Linux.
+# rtmlib (YOLOX + RTMW) on onnxruntime-gpu; coaching is Qwen3.6-27B GGUF via
+# llama.cpp. The cudnn variant ships cuDNN 9 system-wide, which ORT's CUDA
+# provider dlopens — the pip nvidia-cudnn wheel lands in site-packages where
+# ORT does not look on Linux.
 FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -45,6 +63,17 @@ RUN python3.11 -m pip install --no-cache-dir "onnxruntime-gpu==1.26.0" \
 COPY scripts/bake_models.py scripts/
 RUN python3.11 scripts/bake_models.py
 
+# llama.cpp server + Qwen weights (spec §8.1: baked at build time). The
+# ~18 GB models layer sits above everything except src/ and prompts/ so code
+# iteration never re-copies it. models/ is populated before building — see
+# README ("Baked LLM").
+COPY --from=llama-build /llama/build/bin/llama-server /opt/llama/llama-server
+COPY models/ /models/
+ENV LLAMA_SERVER_BIN=/opt/llama/llama-server \
+    MODEL_GGUF=/models/Qwen3.6-27B-Q4_K_M.gguf \
+    MMPROJ_GGUF=/models/mmproj-F16.gguf
+
+COPY prompts/ prompts/
 COPY src/ src/
 
 ENTRYPOINT ["python3.11", "src/main.py"]

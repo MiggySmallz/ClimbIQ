@@ -12,6 +12,7 @@ from artifacts import fetch, put
 from evidence import extract_evidence
 from features import ClimbFeatures, extract_features
 from job_env import JobEnv, JobEnvError, load_job_env
+from llm import run_coaching
 from llm_context import build_llm_context
 from overlay import render_overlay
 from pose import PoseEngine, PoseFrame, smooth_keypoints
@@ -103,9 +104,30 @@ def run_pipeline(env: JobEnv, work_dir: Path) -> None:
             json.dumps(context, indent=2), encoding='utf-8'
         )
 
-    # Overlay + timeline are rendered before the LLM stage while it's a stub
-    # so they stay testable; once M2.15 lands, order becomes LLM → render →
-    # PUT all three artifacts together (spec §8.1).
+    # LLM verification + coaching. The pose ONNX sessions were freed when
+    # run_pose_stage's engine went out of scope, so the 3090/4090 VRAM budget
+    # (spec §8.1) belongs to Qwen here. SKIP_LLM=1 is local-dev only: it keeps
+    # the rest of the pipeline testable without the 17 GB model.
+    if os.environ.get('SKIP_LLM') == '1':
+        from llm import CoachingOutput
+        coaching = CoachingOutput(
+            verified={i.key: False for i in rule_result.issues},
+            drills={},
+            grade_estimate=None,
+            coaching_text='[dev] LLM stage skipped via SKIP_LLM=1.',
+        )
+    else:
+        try:
+            coaching = run_coaching(context, images)
+        except StageError:
+            raise
+        except Exception as e:
+            raise StageError('llm', f'coaching call failed: {e}') from e
+    verified_count = sum(coaching.verified.values())
+    print(f'llm: {verified_count}/{len(rule_result.issues)} issues verified, '
+          f'grade={coaching.grade_estimate}, '
+          f'coaching {len(coaching.coaching_text)} chars')
+
     try:
         overlay_path = work_dir / 'overlay.mp4'
         render_overlay(video_path, pose_frames, env.params.sample_fps, overlay_path)
@@ -116,14 +138,58 @@ def run_pipeline(env: JobEnv, work_dir: Path) -> None:
     print(f'render: overlay {overlay_path.stat().st_size // 1024} KiB, '
           f'timeline {timeline_path.stat().st_size // 1024} KiB')
 
+    result_body = assemble_result(env, pose_frames, rule_result, scores, grade, coaching)
+    result_path = work_dir / 'result.json'
+    result_path.write_text(json.dumps(result_body), encoding='utf-8')
+
     try:
         put(env.overlay_put_url, overlay_path, 'video/mp4')
         put(env.timeline_put_url, timeline_path, 'application/json')
+        put(env.result_put_url, result_path, 'application/json')
     except Exception as e:
         raise StageError('upload', f'artifact upload failed: {e}') from e
+    print('artifacts uploaded — job complete')
 
-    # LLM call + result.json assembly land in M2.12/M2.15/M2.18.
-    raise StageError('llm', 'pipeline not implemented past render/upload yet')
+
+LLM_MODEL_NAME = 'qwen3.6-27b-q4_k_m'
+
+
+def assemble_result(
+    env: JobEnv,
+    pose_frames: list[PoseFrame],
+    rule_result: RuleResult,
+    scores: dict,
+    heuristic_grade: str | None,
+    coaching,
+) -> dict:
+    """result.json per the shared contract (shared/src/report.schema.json)."""
+    return {
+        'version': 1,
+        'video_id': env.params.video_id,
+        'observations': [
+            {
+                'key': i.key,
+                'severity': i.severity,
+                'evidence': i.evidence,
+                'segments': [
+                    {'start_s': round(s, 1), 'end_s': round(e, 1)} for s, e in i.segments
+                ],
+                'verified': coaching.verified.get(i.key, False),
+                'drill': coaching.drills.get(i.key, i.drill),
+            }
+            for i in rule_result.issues
+        ],
+        'positives': [{'key': p.key, 'evidence': p.evidence} for p in rule_result.positives],
+        'scores': scores,
+        'grade_estimate': coaching.grade_estimate or heuristic_grade,
+        'coaching_text': coaching.coaching_text,
+        'llm_model': LLM_MODEL_NAME,
+        'pipeline': {
+            'pose_fps': env.params.sample_fps,
+            'frames_analyzed': len(pose_frames),
+            'duration_s': round(pose_frames[-1].t_s, 1) if pose_frames else 0.0,
+        },
+    }
 
 
 def print_rule_results(result: RuleResult, scores: dict, grade: str | None) -> None:
