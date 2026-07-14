@@ -26,6 +26,7 @@ function RootNavigator() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="onboarding" />
       <Stack.Screen name="climb-form" options={{ presentation: 'modal', headerShown: true }} />
+      <Stack.Screen name="friends" options={{ headerShown: true, title: 'Friends' }} />
     </Stack>
   );
 }

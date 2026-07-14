@@ -52,7 +52,8 @@
 > STATUS: implemented (delete button in edit form with confirm); needs device verification.
 - [~] **M1.5** Stats screen (Home tab): grade pyramid + sends-over-time (last 6 months) with `react-native-gifted-charts`, plus sends/projects tiles. Journal-only stats; technique trends come in M5.
 > STATUS: implemented on Home tab; needs device verification.
-- [ ] **M1.6** Empty/loading/error states verified on every list screen added so far.
+- [~] **M1.6** Empty/loading/error states verified on every list screen added so far.
+> STATUS: code pass done 2026-07-13 — Climbs list, Home stats, and Friends all render explicit loading/error(+retry)/empty states; Feed is a static empty state until M5.3. Remaining: on-device verification together with M1.2–M1.5.
 
 ---
 
@@ -107,14 +108,14 @@
 **Goal:** phone → upload → GPU job → report row → push notification, end to end.
 
 ### M3.A — Orchestrator service
-- [x] **M3.1** Scaffold Fastify TS service in `/backend`: env-only config (missing required secret fails startup loudly, §13), pino structured logs, Supabase JWT verification middleware on every route (§7.2). Never return stack traces/internal errors to clients (§3). (Done 2026-07-13: `src/config.ts`/`server.ts`/`plugins/auth.ts`; JWT verified via `auth.getUser` — swap to local JWKS if latency ever matters; generic 5xx bodies; `GET /health` public + `GET /me` authenticated; smoke-tested: missing env fails startup, /health 200, /me 401 without/with bad token. Backend `.env` needs the service-role key from the dashboard.)
+- [x] **M3.1** Scaffold Fastify TS service in `/backend`: env-only config (missing required secret fails startup loudly, §13), pino structured logs, Supabase JWT verification middleware on every route (§7.2). Never return stack traces/internal errors to clients (§3). (Done 2026-07-13: `src/config.ts`/`server.ts`/`plugins/auth.ts`; JWT verified via `auth.getUser` — swap to local JWKS if latency ever matters; generic 5xx bodies; `GET /health` public + `GET /me` authenticated; smoke-tested: missing env fails startup, /health 200, /me 401 without/with bad token. Later same day, with the owner-provided service-role key: verified end-to-end — admin-created test user's real JWT → /me 200 with matching user id, test user deleted after.)
 - [x] **M3.2** Migration 0003: `videos` (+ `video_status` enum + indexes incl. partial on `expires_at`), `analysis_jobs` (+ `job_status` enum + indexes), `push_tokens` per §9. RLS: videos owner-only; `analysis_jobs` readable by video owner only (§7.1). (Migration `20260713000004` applied to remote 2026-07-13; owner writes limited to `videos` UPDATE (climb re-link, M4.8) — inserts/status changes are orchestrator-only via service role; shared row types added to `shared/src/db.ts`.)
 - [ ] **M3.3** R2 bucket + client: presigned PUT/GET generation. Key layout per §9: `videos/{user_id}/{video_id}.mp4`, `reports/{report_id}/{overlay.mp4,timeline.json,result.json}`. Sign `Content-Length` into presigned PUTs; ≤1 h expiry on job-facing URLs (§8.2 security). *(Requires owner: Cloudflare R2 account + bucket.)*
 - [ ] **M3.4** `POST /videos`: validate metadata (duration ≤90 s, size caps), sanitize filename (§3), create `videos` row with `expires_at = created_at + 30 days`, return presigned PUT URL (§7.2).
 - [ ] **M3.5** `POST /videos/:id/analyze`: create `analysis_jobs` row (`queued`) → post Nosana job → store `nosana_job_id`, status `posted` (§7.2).
 - [ ] **M3.6** Nosana integration via `@nosana/kit` (SDK v2 — NOT legacy `@nosana/sdk`; Node ≥20.18): API-key + Credits auth (§8.2). One thin `postAnalysisJob()` module so wallet fallback touches one file. Job definition: `version`, `type: "container"`, one `container/run` op with `image`, `gpu: true`, `env` = presigned URLs + `JOB_PARAMS`. Pin one small GPU market (warm-node strategy, §8.1). **Never put R2/Supabase secrets in job definitions — env is public IPFS** (§8.2). *(Requires owner: Nosana dashboard API key + funded Credits.)*
 - [ ] **M3.7** Job poller (`setInterval`, 30 s): poll non-terminal jobs → on success download `result.json` from R2 → validate against JSON Schema → insert `reports` row → mark `done` → push notification. On failure/timeout >20 min: mark `error`, auto-retry up to 2×, then user-visible failure push (§7.2, §8.3). Poller safe for single instance; use `FOR UPDATE SKIP LOCKED` pattern if ever scaled.
-- [ ] **M3.8** Migration 0004: `reports` table (+ `report_visibility` enum + indexes) per §9. RLS: owner full access; friends SELECT where `visibility='friends'` via `friendships` join (friendships table lands in M5 — write the policy then or stub owner-only now and extend in M5; note which).
+- [x] **M3.8** Migration 0004: `reports` table (+ `report_visibility` enum + indexes) per §9. RLS: owner full access; friends SELECT where `visibility='friends'` via `friendships` join (friendships table lands in M5 — write the policy then or stub owner-only now and extend in M5; note which). (Done 2026-07-13, migration `20260713000005` applied to remote: owner-all policy. The friends SELECT policy landed the same day in the friendships migration — M5.1 was pulled forward — so no stub remains. `ReportRow` type added to `/shared`.)
 - [ ] **M3.9** `POST /jobs/:id/retry` (max 2 retries then `failed`) and `POST /push/register` (§7.2).
 - [ ] **M3.10** Expo push notifications: send on job done/failure (§7.2). Record `posted_at`/`finished_at` + job price when SDK exposes it (§8.3).
 - [ ] **M3.11** Deploy orchestrator (Fly.io / Railway / VPS — single instance) (§7.2).
@@ -150,8 +151,9 @@
 
 **Goal:** technique trends, friendships, feed.
 
-- [ ] **M5.1** Migration 0005: `friendships` table per §9 + finalize the friends-visibility RLS policy on `reports` (see M3.8).
-- [ ] **M5.2** Friend management: search username → send request → accept (Profile/Feed) (§6).
+- [x] **M5.1** Migration 0005: `friendships` table per §9 + finalize the friends-visibility RLS policy on `reports` (see M3.8). (Pulled forward to 2026-07-13 — friend management needs no external keys, unlike the R2/Nosana-blocked M3 work. Migration `20260713000006` applied to remote: friendships + unique least/greatest pair index (no duplicate/reverse requests, added to spec §9) + friends SELECT policy on reports. Accept is addressee-only and column-restricted (`grant update (status)`) so an update can't rewrite the pair. `Friendship` type in `/shared`.)
+- [~] **M5.2** Friend management: search username → send request → accept (Profile/Feed) (§6).
+> STATUS: implemented 2026-07-13 (pulled forward with M5.1): `/friends` screen (username search → Add/Accept/Requested states, Requests/Sent/Friends sections, decline/cancel/unfriend with confirm), reached from Profile "Friends" button and Feed "Find friends" CTA; services/hooks layered per §6 rules. Needs device verification.
 - [ ] **M5.3** Feed tab: reverse-chron friends' shared reports (thumbnail, grade, top issue, score) → tap → read-only report view (§6). Realtime on `reports` inserts (§7.1).
 - [ ] **M5.4** Progress screen: per-issue trend lines aggregated from `reports.observations` only — never raw video (e.g. "barn-door frames per climb, last 10 reports") (§6, §2 retention).
 - [ ] **M5.5** Verify a friend can view a shared report end-to-end (RLS + signed artifact URLs for non-owner viewers).

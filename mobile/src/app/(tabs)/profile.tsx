@@ -1,3 +1,5 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -61,6 +63,11 @@ export default function ProfileScreen() {
         {session?.user.email}
       </ThemedText>
 
+      <Pressable style={styles.friendsButton} onPress={() => router.push('/friends')}>
+        <Ionicons name="people-outline" size={20} color="#208AEF" />
+        <Text style={styles.friendsText}>Friends</Text>
+      </Pressable>
+
       <Pressable style={styles.signOutButton} onPress={handleSignOut} disabled={busy}>
         {busy ? <ActivityIndicator /> : <Text style={styles.signOutText}>Sign out</Text>}
       </Pressable>
@@ -74,8 +81,20 @@ const styles = StyleSheet.create({
   avatarBusy: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
   username: { fontSize: 24, lineHeight: 30, fontWeight: '700' },
   email: { fontSize: 15 },
+  friendsButton: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#208AEF',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+  },
+  friendsText: { color: '#208AEF', fontSize: 16, fontWeight: '600' },
   signOutButton: {
-    marginTop: 32,
+    marginTop: 16,
     borderWidth: 1,
     borderColor: '#E5484D',
     borderRadius: 10,
