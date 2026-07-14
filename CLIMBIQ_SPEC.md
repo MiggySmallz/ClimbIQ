@@ -274,6 +274,8 @@ create table friendships (
   primary key (user_id, friend_id),
   check (user_id <> friend_id)
 );
+-- one row per pair regardless of direction (no duplicate/reverse requests):
+create unique index on friendships (least(user_id, friend_id), greatest(user_id, friend_id));
 
 create table push_tokens (
   user_id uuid not null references profiles(id) on delete cascade,

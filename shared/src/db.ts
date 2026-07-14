@@ -1,6 +1,8 @@
 // Row types mirroring backend/supabase/migrations. Keep in sync with SQL — the
 // migrations are the source of truth (spec §7.1).
 
+import type { Observation, Positive, Scores } from './report';
+
 export interface Profile {
   id: string;
   username: string;
@@ -68,4 +70,35 @@ export interface PushToken {
   token: string;
   platform: string;
   updated_at: string;
+}
+
+export type ReportVisibility = 'private' | 'friends';
+
+/** DB row (`reports`) — the JSONB columns carry the report-contract shapes. */
+export interface ReportRow {
+  id: string;
+  user_id: string;
+  video_id: string;
+  climb_id: string | null;
+  observations: Observation[];
+  positives: Positive[];
+  scores: Scores;
+  grade_estimate: string | null;
+  coaching_text: string;
+  llm_model: string;
+  overlay_key: string | null;
+  timeline_key: string | null;
+  visibility: ReportVisibility;
+  created_at: string;
+}
+
+export type FriendshipStatus = 'pending' | 'accepted';
+
+/** `user_id` = requester, `friend_id` = addressee; one row per pair,
+ * `accepted` means mutual. */
+export interface Friendship {
+  user_id: string;
+  friend_id: string;
+  status: FriendshipStatus;
+  created_at: string;
 }
