@@ -100,6 +100,12 @@ class LlamaServer:
             'temperature': TEMPERATURE,
             'max_tokens': MAX_TOKENS,
             'response_format': {'type': 'json_object'},
+            # Qwen3.6 is a hybrid-thinking model: without this, it spends the
+            # entire max_tokens budget on <think> content and never emits an
+            # answer (empirically: finish_reason="length", content=""). The
+            # chat template checks this exact var name (verified against the
+            # baked template's Jinja source).
+            'chat_template_kwargs': {'enable_thinking': False},
         }).encode()
         req = urllib.request.Request(
             f'http://127.0.0.1:{SERVER_PORT}/v1/chat/completions',
@@ -136,9 +142,20 @@ def _build_messages(context: dict, images: list[EvidenceImage]) -> list[dict]:
     ]
 
 
+def _strip_code_fence(raw: str) -> str:
+    """response_format=json_object doesn't stop this model wrapping output in
+    a ```json fence (empirically: fenced despite the mode) — strip one if present."""
+    text = raw.strip()
+    if text.startswith('```'):
+        text = text.split('\n', 1)[1] if '\n' in text else text[3:]
+        if text.rstrip().endswith('```'):
+            text = text.rstrip()[:-3]
+    return text.strip()
+
+
 def _parse_output(raw: str, expected_keys: list[str]) -> CoachingOutput:
     try:
-        data = json.loads(raw)
+        data = json.loads(_strip_code_fence(raw))
     except json.JSONDecodeError as e:
         raise LlmError(f'model output is not valid JSON: {e}') from e
     if not isinstance(data, dict):

@@ -1,6 +1,7 @@
 # llama.cpp build stage — pinned tag clone per spec §3 (never copied-in
 # source). Server binary only; CUDA arches cover 3090 (86), 4090 (89) and
-# A100 (80) class Nosana nodes.
+# A100 (80) class Nosana nodes. -j 4: unbounded nvcc parallelism (2-4 GB RAM
+# each) OOM-killed the WSL2 build VM twice; keep it capped.
 FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS llama-build
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git cmake build-essential ca-certificates \
@@ -14,7 +15,7 @@ RUN git clone --depth 1 --branch ${LLAMA_TAG} https://github.com/ggml-org/llama.
         -DLLAMA_BUILD_SERVER=ON \
         -DBUILD_SHARED_LIBS=OFF \
         -DLLAMA_CURL=OFF \
-    && cmake --build /llama/build --config Release -j --target llama-server
+    && cmake --build /llama/build --config Release -j 4 --target llama-server
 
 # CUDA runtime base, Python 3.11, no PyTorch (spec §8.1) — pose inference is
 # rtmlib (YOLOX + RTMW) on onnxruntime-gpu; coaching is Qwen3.6-27B GGUF via
