@@ -4,7 +4,7 @@
 // container and the orchestrator both validate against; keep all three in sync
 // by hand (contract changes are additive-only per spec §10).
 
-import type { IssueKey, PositiveKey } from './reportKeys';
+import type { IssueKey, PositiveKey } from './reportKeys.js';
 
 export type Severity = 'high' | 'medium' | 'low';
 

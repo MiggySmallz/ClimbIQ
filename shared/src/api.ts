@@ -2,7 +2,7 @@
 // the Fastify routes (/backend) and the mobile client (/mobile) so the two halves
 // can't drift (spec §3). Route table lives in spec §7.2.
 
-import type { JobStatus } from './db';
+import type { JobStatus } from './db.js';
 
 /** Hard limits enforced on both sides (spec §6 clip rules, §8.2 size cap). */
 export const MAX_CLIP_SECONDS = 90;

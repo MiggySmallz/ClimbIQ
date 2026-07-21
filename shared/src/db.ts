@@ -1,7 +1,7 @@
 // Row types mirroring backend/supabase/migrations. Keep in sync with SQL — the
 // migrations are the source of truth (spec §7.1).
 
-import type { Observation, Positive, Scores } from './report';
+import type { Observation, Positive, Scores } from './report.js';
 
 export interface Profile {
   id: string;
