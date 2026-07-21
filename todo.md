@@ -228,9 +228,11 @@
 
 - [x] Supabase project created + Google OAuth credentials (needed by M0.5)
 - [x] Supabase service-role key copied into `backend/.env` (dashboard → Settings → API; needed to run the orchestrator, M3.4+)
-- [x] Cloudflare R2 account + bucket + keys (needed by M3.3) — owner confirmed 2026-07-20 they have all four: **account ID**, **access key ID**, **secret access key**, **bucket name**. Not yet in `backend/.env` under final var names — M3.3 defines them (see NEXT-UP note).
+- [~] Cloudflare R2 account + bucket + keys (needed by M3.3) — owner has all four. **M3.3 defined the var names (done 2026-07-20); owner still must put them in `backend/.env`:** `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`. The server now fails startup loudly until these are set (they're in `loadConfig` REQUIRED). Also confirm bucket CORS is irrelevant (native app + server-side job only, §8.2) and the bucket allows the presigned single-object PUT/GET the client issues.
 - [~] Nosana dashboard API key + Credits funded (needed by M3.6) — `NOSANA_API_KEY` added to `backend/.env` 2026-07-20. **Still needed:** confirm Credits are funded, and pick + set `NOSANA_MARKET` (a small GPU market address via `client.api.markets`, warm-node strategy §8.1).
 - [ ] Expo push credentials (needed by M3.10)
+- [ ] Apply the session-2 migrations to remote (`supabase db push` from `backend/`): `20260720000002_analysis_jobs_report_id`, `20260720000003_enable_realtime` (needed before M3.5/M3.7/M3.16 work live).
+- [ ] Set `EXPO_PUBLIC_API_URL` in `mobile/.env` to the orchestrator URL — machine LAN IP for on-device dev (e.g. `http://192.168.x.x:8080`), deployed URL later (M3.11). The mobile app fails loudly without it once the upload/report paths run.
 - [x] Sample climbing videos for M2 testing (needed by M2.19)
 - [x] Container registry choice/credentials for the ~20 GB analysis image (needed by M3.12) — Docker Hub `miggysmallz`, image pushed as `docker.io/miggysmallz/climbiq-analysis-job:v1` (public).
 
