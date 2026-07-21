@@ -1,8 +1,11 @@
+import type { S3Client } from '@aws-sdk/client-s3';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 
 import type { Config } from './config.js';
 import authPlugin from './plugins/auth.js';
+import { createR2Client } from './r2/client.js';
+import { registerVideoRoutes } from './routes/videos.js';
 
 export async function buildServer(config: Config): Promise<FastifyInstance> {
   const app = Fastify({
@@ -16,6 +19,9 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
   });
   app.decorate('supabase', supabase);
 
+  // R2 (S3-compatible) client for presigned uploads/downloads (§8.2, §9).
+  app.decorate('r2', { client: createR2Client(config), bucket: config.r2Bucket });
+
   await app.register(authPlugin, { supabase });
 
   // Never leak internals to clients (spec §3): 4xx keep their message
@@ -28,9 +34,10 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
 
   app.get('/health', { config: { public: true } }, async () => ({ status: 'ok' }));
 
-  // Minimal authenticated endpoint: exercises the JWT middleware end-to-end
-  // until the real routes (M3.4+) land.
+  // Minimal authenticated endpoint: exercises the JWT middleware end-to-end.
   app.get('/me', async (request) => ({ user_id: request.userId }));
+
+  registerVideoRoutes(app);
 
   return app;
 }
@@ -38,5 +45,6 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
 declare module 'fastify' {
   interface FastifyInstance {
     supabase: SupabaseClient;
+    r2: { client: S3Client; bucket: string };
   }
 }

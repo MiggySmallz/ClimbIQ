@@ -8,6 +8,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import { ThemedText } from '@/components/themed-text';
 import { TrimRange } from '@/components/trim-range';
 import { useTheme } from '@/hooks/use-theme';
+import { createVideo, requestAnalysis, saveToGallery, uploadToR2 } from '@/services/uploads';
 import {
   extractThumbnails,
   isVideoProcessingSupported,
@@ -133,7 +134,7 @@ export default function TrimScreen() {
   }
 
   if (status === 'done' && result) {
-    return <ReadyState clip={result} />;
+    return <ReadyState clip={result} width={width} height={height} origin={origin} />;
   }
 
   const processing = status === 'processing';
@@ -187,17 +188,107 @@ export default function TrimScreen() {
   );
 }
 
+type UploadPhase = 'preview' | 'uploading' | 'starting' | 'started' | 'error';
+
 /**
- * Interim terminal state: the clip is trimmed + compressed locally, but upload
- * and analysis (M3.15+) are blocked on R2/the orchestrator. Honest, not a fake
- * "analyzing" spinner.
+ * Terminal state: preview the trimmed+compressed clip, then upload it straight to
+ * R2 with a progress bar and start the analysis job (spec §6, M3.15). The
+ * job-status realtime screen (M3.16) takes over from the "started" state.
  */
-function ReadyState({ clip }: { clip: ProcessedClip }) {
+function ReadyState({
+  clip,
+  width,
+  height,
+  origin,
+}: {
+  clip: ProcessedClip;
+  width: number | null;
+  height: number | null;
+  origin: VideoOrigin;
+}) {
   const theme = useTheme();
   const player = useVideoPlayer(clip.uri, (p) => {
     p.loop = true;
   });
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
+
+  const [phase, setPhase] = useState<UploadPhase>('preview');
+  const [progress, setProgress] = useState(0);
+  const [videoId, setVideoId] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  async function startAnalysis() {
+    try {
+      let id = videoId;
+      if (!id) {
+        setPhase('uploading');
+        setProgress(0);
+        const created = await createVideo({
+          uri: clip.uri,
+          durationS: clip.durationS,
+          width,
+          height,
+        });
+        await uploadToR2(created.upload_url, clip.uri, setProgress);
+        id = created.video_id;
+        setVideoId(id); // keep it so a retry re-triggers analysis without re-uploading
+      }
+      setPhase('starting');
+      await requestAnalysis(id);
+      setPhase('started');
+    } catch {
+      setPhase('error');
+    }
+  }
+
+  async function save() {
+    try {
+      const ok = await saveToGallery(clip.uri);
+      if (ok) setSaved(true);
+      else Alert.alert('Save', 'Allow photo access to save this clip to your gallery.');
+    } catch {
+      Alert.alert('Save', "Couldn't save this clip to your gallery.");
+    }
+  }
+
+  const busy = phase === 'uploading' || phase === 'starting';
+
+  if (phase === 'started') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.body}>
+          <View style={styles.readyHeader}>
+            <Ionicons name="checkmark-circle" size={24} color="#30A46C" />
+            <ThemedText style={styles.title}>Analysis started</ThemedText>
+          </View>
+          <ThemedText themeColor="textSecondary" style={styles.hint}>
+            We&apos;ll notify you when your coaching report is ready. First analyses can take a
+            little longer while a GPU spins up.
+          </ThemedText>
+          {origin === 'record' && (
+            <Pressable
+              style={[styles.secondary, { borderColor: theme.textSecondary }]}
+              onPress={save}
+              disabled={saved}>
+              <Ionicons
+                name={saved ? 'checkmark' : 'download-outline'}
+                size={20}
+                color={theme.text}
+              />
+              <ThemedText style={styles.secondaryText}>
+                {saved ? 'Saved to gallery' : 'Save clip to gallery'}
+              </ThemedText>
+            </Pressable>
+          )}
+        </View>
+        <Pressable
+          style={[styles.primary, { backgroundColor: theme.backgroundSelected }]}
+          onPress={() => router.replace('/(tabs)/analyze')}>
+          <Text style={[styles.primaryText, { color: theme.text }]}>Done</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -207,8 +298,7 @@ function ReadyState({ clip }: { clip: ProcessedClip }) {
           <ThemedText style={styles.title}>Clip ready</ThemedText>
         </View>
         <ThemedText themeColor="textSecondary" style={styles.hint}>
-          Trimmed to {Math.round(clip.durationS)}s and compressed to ≤1080p. Upload and analysis
-          turn on once the backend is connected.
+          Trimmed to {Math.round(clip.durationS)}s and compressed to ≤1080p.
         </ThemedText>
 
         <Pressable onPress={() => (isPlaying ? player.pause() : player.play())}>
@@ -219,12 +309,43 @@ function ReadyState({ clip }: { clip: ProcessedClip }) {
             nativeControls={false}
           />
         </Pressable>
+
+        {phase === 'uploading' && (
+          <View style={styles.progressBlock}>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+            </View>
+            <ThemedText themeColor="textSecondary" type="small">
+              Uploading… {Math.round(progress * 100)}%
+            </ThemedText>
+          </View>
+        )}
+
+        {phase === 'error' && (
+          <ThemedText type="small" style={styles.errorText}>
+            {videoId
+              ? "Uploaded, but we couldn't start the analysis. Try again."
+              : "Couldn't upload that clip. Check your connection and try again."}
+          </ThemedText>
+        )}
       </View>
 
       <Pressable
-        style={[styles.primary, { backgroundColor: theme.backgroundSelected }]}
-        onPress={() => router.back()}>
-        <Text style={[styles.primaryText, { color: theme.text }]}>Done</Text>
+        style={[styles.primary, busy && styles.primaryDisabled]}
+        onPress={startAnalysis}
+        disabled={busy}>
+        {busy ? (
+          <>
+            <ActivityIndicator color="#fff" />
+            <Text style={styles.primaryText}>
+              {phase === 'starting' ? 'Starting…' : 'Uploading…'}
+            </Text>
+          </>
+        ) : (
+          <Text style={styles.primaryText}>
+            {phase === 'error' ? 'Try again' : 'Analyze this clip'}
+          </Text>
+        )}
       </Pressable>
     </View>
   );
@@ -246,6 +367,21 @@ const styles = StyleSheet.create({
   readout: { flexDirection: 'row', justifyContent: 'space-between' },
   readyHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   preview: { width: '100%', height: 320, borderRadius: 12, backgroundColor: '#000', marginTop: 8 },
+  progressBlock: { gap: 6, marginTop: 4 },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: '#00000022', overflow: 'hidden' },
+  progressFill: { height: 8, borderRadius: 4, backgroundColor: '#208AEF' },
+  errorText: { color: '#E5484D', marginTop: 4 },
+  secondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  secondaryText: { fontSize: 16, fontWeight: '600' },
   primary: {
     flexDirection: 'row',
     alignItems: 'center',

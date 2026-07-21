@@ -56,6 +56,9 @@ export interface AnalysisJob {
   id: string;
   video_id: string;
   status: JobStatus;
+  /** Report id pre-allocated at post time — the R2 key prefix for the artifacts
+   *  and the eventual reports.id on insert (spec §9 note; M3.5/M3.7). */
+  report_id: string | null;
   nosana_job_id: string | null;
   nosana_market: string | null;
   attempt: number;

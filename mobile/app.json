@@ -54,6 +54,14 @@
           "microphonePermission": "ClimbIQ records audio with your climbing videos.",
           "recordAudioAndroid": true
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "ClimbIQ saves your climbing clips to your photo library.",
+          "savePhotosPermission": "ClimbIQ saves your climbing clips to your photo library.",
+          "isAccessMediaLocationEnabled": false
+        }
       ]
     ],
     "experiments": {

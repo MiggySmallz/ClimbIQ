@@ -14,6 +14,7 @@
 
 import {
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -105,6 +106,25 @@ export function presignPut(
   }
 
   return getSignedUrl(client, command, options);
+}
+
+/** HEAD an object; returns its byte size, or null if it doesn't exist. Used to
+ *  confirm an upload actually landed before posting a job (M3.5). */
+export async function headObject(
+  client: S3Client,
+  bucket: string,
+  key: string,
+): Promise<{ contentLength: number } | null> {
+  try {
+    const res = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return { contentLength: res.ContentLength ?? 0 };
+  } catch (err) {
+    // S3/R2 signals a missing object with a 404 / NotFound / NoSuchKey.
+    const status = (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    const name = (err as { name?: string }).name;
+    if (status === 404 || name === 'NotFound' || name === 'NoSuchKey') return null;
+    throw err;
+  }
 }
 
 /** Presigned GET URL for a single object. */

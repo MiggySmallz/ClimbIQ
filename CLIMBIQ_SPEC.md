@@ -184,7 +184,7 @@ Orchestrator flow per analysis: pick/pin the GPU market (via `client.api.markets
 
 **Fallback:** the SDK still supports keypair wallets; the owner's funded wallet is the escape hatch if the API (alpha) has gaps. Keep the abstraction thin — one `postAnalysisJob()` module — so swapping payment modes touches one file.
 
-**Security note (important):** standard Nosana job definitions are pinned to **public IPFS** — anything in `env` is world-readable. Mitigations, in order: (1) presigned URLs scoped to a single object with ≤1 h expiry — leaked URLs go stale fast and expose only one climbing video; (2) if that's ever not acceptable, use Nosana **confidential jobs** (`--confidential` / SDK equivalent), which transfer the job definition peer-to-peer instead of IPFS. Start with (1) + short expiries; document (2) as the upgrade path. Never put R2 account keys or Supabase secrets in a job definition. Additionally, sign the `Content-Length` header into presigned PUTs to cap what the job can upload (presigned URLs are already single-object by construction). Bucket CORS policy is irrelevant here — CORS is a browser mechanism; neither the server-side job nor the native app is subject to it (revisit only if a web client is ever added).
+**Security note (important):** standard Nosana job definitions are pinned to **public IPFS** — anything in `env` is world-readable. Mitigations, in order: (1) presigned URLs scoped to a single object with ≤1 h expiry — leaked URLs go stale fast and expose only one climbing video; (2) if that's ever not acceptable, use Nosana **confidential jobs** (`--confidential` / SDK equivalent), which transfer the job definition peer-to-peer instead of IPFS. Start with (1) + short expiries; document (2) as the upgrade path. Never put R2 account keys or Supabase secrets in a job definition. Additionally, sign the `Content-Length` header into presigned PUTs to cap what the job can upload (presigned URLs are already single-object by construction). **Implementation note (M3.3/M3.4):** Content-Length is only signable when the byte count is known at signing time — true for the phone's upload PUT (the app measures the compressed clip), so that URL is size-capped. The three container-generated artifact PUTs (result/overlay/timeline) have unknown size when the job is posted, so they rely on the single-object scope + ≤1 h expiry alone; an exact size can't be signed for bytes that don't exist yet. Bucket CORS policy is irrelevant here — CORS is a browser mechanism; neither the server-side job nor the native app is subject to it (revisit only if a web client is ever added).
 
 ### 8.3 Failure & cost handling
 - Job states: `queued → posted → running → done | error | timeout` (poller-driven).
@@ -235,6 +235,10 @@ create table analysis_jobs (
   id uuid primary key default gen_random_uuid(),
   video_id uuid not null references videos(id) on delete cascade,
   status job_status not null default 'queued',
+  report_id uuid,                    -- pre-allocated at post time: R2 key prefix
+                                     -- reports/{report_id}/… and the eventual
+                                     -- reports.id on insert (M3.5/M3.7). No FK —
+                                     -- the reports row doesn't exist yet.
   nosana_job_id text,
   nosana_market text,
   attempt int not null default 1,
