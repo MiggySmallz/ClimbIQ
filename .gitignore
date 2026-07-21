@@ -49,6 +49,9 @@ Thumbs.db
 *.mp4
 *.mov
 !docs/**/*.mp4
+# Sample report artifacts from a real M2.19 pipeline run — fixture data for
+# building the M4 report screen without R2/accounts.
+!nosana/analysis-job/sample-output/overlay.mp4
 test-videos/
 
 # Claude Code local state

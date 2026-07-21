@@ -25,13 +25,21 @@ never hand-edit tables in the Supabase dashboard.
 
 ### Commands (Supabase CLI)
 
+The CLI ships as a repo dev dependency — no global install. Run it via `npx`
+(from this `backend/` dir, where `supabase/config.toml` lives) or the npm
+scripts below:
+
 ```sh
-supabase login                 # once
-supabase link --project-ref <ref>   # once per machine, ref from dashboard URL
-supabase db push               # apply pending local migrations to the remote DB
-supabase db reset              # local dev DB only: recreate from all migrations
-supabase migration new <name>  # scaffold a new timestamped migration file
+npx supabase login                    # once (per machine)
+npx supabase link --project-ref <ref> # once per machine, ref from dashboard URL
+
+npm run db:push                # apply pending local migrations to the remote DB
+npm run db:reset               # local dev DB only: recreate from all migrations
+npm run db:new -- <name>       # scaffold a new timestamped migration file
 ```
+
+(`npm run db:push` etc. resolve the workspace-local `supabase` binary. Plain
+`supabase …` only works if you also have it installed globally.)
 
 CI runs `supabase db reset` against a scratch database to verify every migration
 applies cleanly from zero (the "migration check" in M0.4).

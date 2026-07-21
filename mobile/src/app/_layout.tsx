@@ -27,6 +27,12 @@ function RootNavigator() {
       <Stack.Screen name="onboarding" />
       <Stack.Screen name="climb-form" options={{ presentation: 'modal', headerShown: true }} />
       <Stack.Screen name="friends" options={{ headerShown: true, title: 'Friends' }} />
+      <Stack.Screen name="report/[id]" options={{ headerShown: true, title: 'Report' }} />
+      <Stack.Screen
+        name="analyze/record"
+        options={{ headerShown: false, presentation: 'fullScreenModal' }}
+      />
+      <Stack.Screen name="analyze/trim" options={{ headerShown: true, title: 'Trim clip' }} />
     </Stack>
   );
 }

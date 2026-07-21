@@ -68,6 +68,17 @@ export default function ProfileScreen() {
         <Text style={styles.friendsText}>Friends</Text>
       </Pressable>
 
+      {__DEV__ && (
+        // Dev-only: opens the report screen against the bundled sample report so
+        // M4 can be verified on device before the analyze/upload flow (M3) lands.
+        <Pressable
+          style={styles.friendsButton}
+          onPress={() => router.push({ pathname: '/report/[id]', params: { id: 'sample' } })}>
+          <Ionicons name="flask-outline" size={20} color="#208AEF" />
+          <Text style={styles.friendsText}>View sample report</Text>
+        </Pressable>
+      )}
+
       <Pressable style={styles.signOutButton} onPress={handleSignOut} disabled={busy}>
         {busy ? <ActivityIndicator /> : <Text style={styles.signOutText}>Sign out</Text>}
       </Pressable>

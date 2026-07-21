@@ -117,7 +117,7 @@ climbiq/
 - **Onboarding/Auth** — Google button + email/password (Supabase Auth). Username + optional avatar on first login (writes `profiles`).
 - **Analyze (core flow)** —
   1. Record with expo-camera (framing guidance overlay: "whole body + wall in frame, phone landscape or stable portrait, one climber") or pick from gallery.
-  2. **Mandatory trim screen** before every upload (pre-filled to the full range, one tap to confirm): climbing videos routinely open with 10–15 s of chalking up and staring at the wall — every trimmed second saves GPU time and LLM tokens. Coach the user to cut to pull-on → top-out. Pre-checks after trim: duration ≤ 90 s, resolution ≥ 720p. Compress to ≤1080p H.264 to cut upload + GPU cost.
+  2. **Mandatory trim screen** before every upload (pre-filled to the full range, one tap to confirm): climbing videos routinely open with 10–15 s of chalking up and staring at the wall — every trimmed second saves GPU time and LLM tokens. Coach the user to cut to pull-on → top-out. Pre-checks after trim: duration ≤ 90 s, resolution ≥ 720p. Compress to ≤1080p H.264 to cut upload + GPU cost. **Trim/compress library (decided 2026-07-20):** `react-native-video-trim` (headless `trim()`/`compress()`/`getFrameAt()`, native hardware re-encoding — not the retired ffmpeg-kit). Chosen after `react-native-compressor` was found to compress but not trim. Custom trim UI (thumbnail strip + two-handle range) is ours; the library does execution only.
   3. `POST /videos` to orchestrator → presigned PUT URL → upload direct to R2 with progress bar. For in-app recordings, offer **"Save to device gallery"** (expo-media-library) after upload — the server copy expires (§11); the gallery copy is the user's permanent raw video.
   4. Job status screen (queued → on GPU → analyzing → writing report) driven by Supabase realtime on `analysis_jobs.status`; user can leave anytime — Expo push fires on completion or failure.
 - **Report screen** — renders the report contract (§10): overlay clip player, issue cards (severity-colored, tap → seek video to evidence timestamp, drill text), biomechanics timeline synced two-way with the video scrubber (scrubbing the chart seeks the video and vice versa), score radar/bars + grade estimate, share button (visibility: private/friends). Shows "raw video available until <date>" so expiry is never a surprise.
@@ -251,6 +251,7 @@ create table reports (
   user_id uuid not null references profiles(id) on delete cascade,
   video_id uuid not null references videos(id),
   climb_id uuid references climbs(id) on delete set null,
+  version smallint not null default 1, -- result.json contract version; client checks before render (§10)
   observations jsonb not null,       -- issue cards: key, severity, evidence, timestamps, drill
   positives jsonb not null default '[]',
   scores jsonb not null,             -- per-category 0-100 + overall

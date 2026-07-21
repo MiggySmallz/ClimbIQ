@@ -80,6 +80,10 @@ export interface ReportRow {
   user_id: string;
   video_id: string;
   climb_id: string | null;
+  /** Report-contract version (mirrors result.json `version`). The client checks
+   * this before rendering and shows an "update the app" fallback for unknown
+   * versions (spec §10). Set by the orchestrator from result.json (M3.7). */
+  version: number;
   observations: Observation[];
   positives: Positive[];
   scores: Scores;

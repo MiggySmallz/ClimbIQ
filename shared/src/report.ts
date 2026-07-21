@@ -57,6 +57,32 @@ export interface AnalysisReport {
   pipeline: Pipeline;
 }
 
+/**
+ * `timeline.json` — the per-frame biomechanics series for the report screen's
+ * chart, stored in R2 (spec §10 note: heavy per-frame data never goes in the
+ * Postgres report row). Values are body-scale-normalized (torso lengths) so a
+ * chart is comparable across videos; `null` = not measurable that frame.
+ * Produced by `nosana/analysis-job/src/timeline.py` — keep in sync.
+ */
+export interface TimelineSeries {
+  /** Sample timestamps (seconds), one per analyzed frame. */
+  t_s: number[];
+  hip_x_torsos: (number | null)[];
+  hip_height_torsos: (number | null)[];
+  elbow_angle_l_deg: (number | null)[];
+  elbow_angle_r_deg: (number | null)[];
+  foot_axis_l_deg: (number | null)[];
+  foot_axis_r_deg: (number | null)[];
+}
+
+export interface Timeline {
+  /** Bump only for breaking shape changes (mirrors report `version`). */
+  version: 1;
+  /** Hip-height baseline (torsos) the hip_drop rule compares against. */
+  hip_baseline_torsos: number;
+  series: TimelineSeries;
+}
+
 /** Which pipeline stage failed (spec §8.1: "any failure: PUT a structured error JSON"). */
 export type AnalysisErrorStage =
   | 'download'
