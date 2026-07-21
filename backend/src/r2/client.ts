@@ -127,6 +127,18 @@ export async function headObject(
   }
 }
 
+/** Download an object's body as text (server-side; the orchestrator has creds,
+ *  so no presign needed). Used by the poller to read result.json (M3.7). */
+export async function getObjectText(
+  client: S3Client,
+  bucket: string,
+  key: string,
+): Promise<string> {
+  const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!res.Body) throw new Error('empty object body');
+  return res.Body.transformToString();
+}
+
 /** Presigned GET URL for a single object. */
 export function presignGet(
   client: S3Client,

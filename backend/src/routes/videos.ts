@@ -17,17 +17,10 @@ import {
 } from '@climbiq/shared';
 import type { FastifyInstance } from 'fastify';
 
+import { postAndRecordJob } from '../analysis/dispatch.js';
 import { loadNosanaConfig } from '../config.js';
 import { createAnalysisJobPoster } from '../nosana/postAnalysisJob.js';
-import {
-  headObject,
-  presignGet,
-  presignPut,
-  reportOverlayKey,
-  reportResultKey,
-  reportTimelineKey,
-  videoKey,
-} from '../r2/client.js';
+import { headObject, presignPut, videoKey } from '../r2/client.js';
 
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (spec §11.8)
 
@@ -142,12 +135,6 @@ export function registerVideoRoutes(app: FastifyInstance): void {
       // Pre-allocate the report id: it's the R2 key prefix for the artifacts the
       // job PUTs, and the reports.id the poller inserts later (§9 note, M3.7).
       const reportId = randomUUID();
-      const [videoUrl, resultPutUrl, overlayPutUrl, timelinePutUrl] = await Promise.all([
-        presignGet(client, bucket, video.r2_key),
-        presignPut(client, bucket, { key: reportResultKey(reportId) }),
-        presignPut(client, bucket, { key: reportOverlayKey(reportId) }),
-        presignPut(client, bucket, { key: reportTimelineKey(reportId) }),
-      ]);
 
       const { data: job, error: insErr } = await app.supabase
         .from('analysis_jobs')
@@ -157,20 +144,13 @@ export function registerVideoRoutes(app: FastifyInstance): void {
       if (insErr) throw new Error(`analysis_jobs insert failed: ${insErr.message}`);
 
       try {
-        const poster = createAnalysisJobPoster(nosanaConfig);
-        const posted = await poster.postAnalysisJob({
-          urls: { videoUrl, resultPutUrl, overlayPutUrl, timelinePutUrl },
-          params: { video_id: videoId, sample_fps: nosanaConfig.sampleFps, declared_grade: null },
+        await postAndRecordJob(app, createAnalysisJobPoster(nosanaConfig), {
+          jobRowId: job.id,
+          reportId,
+          videoR2Key: video.r2_key,
+          videoId,
+          sampleFps: nosanaConfig.sampleFps,
         });
-        await app.supabase
-          .from('analysis_jobs')
-          .update({
-            nosana_job_id: posted.jobId,
-            nosana_market: posted.market,
-            status: 'posted',
-            posted_at: new Date().toISOString(),
-          })
-          .eq('id', job.id);
         return { job_id: job.id, status: 'posted' };
       } catch (err) {
         request.log.error(err, 'nosana job post failed');

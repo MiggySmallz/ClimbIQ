@@ -35,8 +35,29 @@ export interface PostedJob {
   costUsd: number;
 }
 
+/** Normalized Nosana job lifecycle (the on-chain enum, as string or number). */
+export type NosanaJobState = 'queued' | 'running' | 'completed' | 'stopped' | 'unknown';
+
+/** Nosana JobState enum order (index == on-chain numeric value). */
+const STATE_BY_INDEX: NosanaJobState[] = ['queued', 'running', 'completed', 'stopped'];
+
+/** Map whatever `job.state` the API returns (string enum or numeric) to our set. */
+function normalizeJobState(state: unknown): NosanaJobState {
+  if (typeof state === 'number') return STATE_BY_INDEX[state] ?? 'unknown';
+  if (typeof state === 'string') {
+    const lower = state.toLowerCase();
+    if (lower === 'queued' || lower === 'queue') return 'queued';
+    if (lower === 'running') return 'running';
+    if (lower === 'completed' || lower === 'complete' || lower === 'done') return 'completed';
+    if (lower === 'stopped' || lower === 'stop') return 'stopped';
+  }
+  return 'unknown';
+}
+
 export interface AnalysisJobPoster {
   postAnalysisJob(input: PostAnalysisJobInput): Promise<PostedJob>;
+  /** Poll a posted job's lifecycle state by its Nosana job address (M3.7). */
+  getJobState(jobId: string): Promise<NosanaJobState>;
 }
 
 /**
@@ -78,5 +99,10 @@ export function createAnalysisJobPoster(
     };
   }
 
-  return { postAnalysisJob };
+  async function getJobState(jobId: string): Promise<NosanaJobState> {
+    const job = (await client.api.jobs.get(jobId)) as { state?: unknown };
+    return normalizeJobState(job.state);
+  }
+
+  return { postAnalysisJob, getJobState };
 }

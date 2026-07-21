@@ -1,5 +1,6 @@
 import type {
   AnalysisReport,
+  ReportArtifactsResponse,
   ReportRow,
   ReportVisibility,
   Timeline,
@@ -84,8 +85,15 @@ export async function getReportArtifacts(id: string): Promise<ReportArtifacts> {
     };
   }
   // Production: GET /reports/:id/artifacts → short-lived signed R2 URLs for the
-  // overlay clip + timeline JSON (M4.1). Blocked on R2 (M3.3).
-  throw new Error('report_artifacts_unavailable');
+  // overlay clip + timeline JSON (M4.1). Lazy-import the API client so the sample
+  // path never requires EXPO_PUBLIC_API_URL.
+  const { apiFetch } = await import('@/lib/api');
+  const { overlay_url, timeline_url } = await apiFetch<ReportArtifactsResponse>(
+    `/reports/${id}/artifacts`,
+  );
+  if (!overlay_url || !timeline_url) throw new Error('report_artifacts_unavailable');
+  const timeline = (await fetch(timeline_url).then((r) => r.json())) as Timeline;
+  return { overlay: { uri: overlay_url }, timeline };
 }
 
 export async function setReportVisibility(

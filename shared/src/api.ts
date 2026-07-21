@@ -37,3 +37,11 @@ export interface AnalyzeVideoResponse {
   job_id: string;
   status: JobStatus;
 }
+
+/** Response of `GET /reports/:id/artifacts` — short-lived signed R2 GET URLs for
+ *  the overlay clip + timeline JSON (§7.2, M4.1). Null when the artifact key is
+ *  absent (e.g. a report predating an artifact). */
+export interface ReportArtifactsResponse {
+  overlay_url: string | null;
+  timeline_url: string | null;
+}

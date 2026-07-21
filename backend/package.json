@@ -20,6 +20,7 @@
     "@climbiq/shared": "*",
     "@nosana/kit": "^2.7.0",
     "@supabase/supabase-js": "^2.110.3",
+    "ajv": "^8.20.0",
     "fastify": "^5.7.4",
     "fastify-plugin": "^5.1.0"
   },
