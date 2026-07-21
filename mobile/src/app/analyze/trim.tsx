@@ -215,6 +215,7 @@ function ReadyState({
   const [phase, setPhase] = useState<UploadPhase>('preview');
   const [progress, setProgress] = useState(0);
   const [videoId, setVideoId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   async function startAnalysis() {
@@ -234,7 +235,8 @@ function ReadyState({
         setVideoId(id); // keep it so a retry re-triggers analysis without re-uploading
       }
       setPhase('starting');
-      await requestAnalysis(id);
+      const { job_id } = await requestAnalysis(id);
+      setJobId(job_id);
       setPhase('started');
     } catch {
       setPhase('error');
@@ -282,9 +284,13 @@ function ReadyState({
           )}
         </View>
         <Pressable
-          style={[styles.primary, { backgroundColor: theme.backgroundSelected }]}
-          onPress={() => router.replace('/(tabs)/analyze')}>
-          <Text style={[styles.primaryText, { color: theme.text }]}>Done</Text>
+          style={styles.primary}
+          onPress={() =>
+            jobId
+              ? router.replace({ pathname: '/analyze/status', params: { jobId } })
+              : router.replace('/(tabs)/analyze')
+          }>
+          <Text style={styles.primaryText}>Track progress</Text>
         </Pressable>
       </View>
     );

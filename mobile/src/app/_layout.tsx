@@ -33,6 +33,7 @@ function RootNavigator() {
         options={{ headerShown: false, presentation: 'fullScreenModal' }}
       />
       <Stack.Screen name="analyze/trim" options={{ headerShown: true, title: 'Trim clip' }} />
+      <Stack.Screen name="analyze/status" options={{ headerShown: true, title: 'Analysis' }} />
     </Stack>
   );
 }
