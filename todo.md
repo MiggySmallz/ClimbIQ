@@ -232,7 +232,7 @@
 - [~] Nosana dashboard API key + Credits funded (needed by M3.6) — `NOSANA_API_KEY` added to `backend/.env` 2026-07-20. **Still needed:** confirm Credits are funded, and pick + set `NOSANA_MARKET` (a small GPU market address via `client.api.markets`, warm-node strategy §8.1).
 - [ ] Expo push credentials (needed by M3.10)
 - [ ] Apply the session-2 migrations to remote (`supabase db push` from `backend/`): `20260720000002_analysis_jobs_report_id`, `20260720000003_enable_realtime` (needed before M3.5/M3.7/M3.16 work live).
-- [ ] Set `EXPO_PUBLIC_API_URL` in `mobile/.env` to the orchestrator URL — machine LAN IP for on-device dev (e.g. `http://192.168.x.x:8080`), deployed URL later (M3.11). The mobile app fails loudly without it once the upload/report paths run.
+- [ ] **PORT conflict on this machine:** port **8080 is taken by Oracle's TNS Listener (`TNSLSNR`)** — the orchestrator can't bind it here. Set `PORT=8787` (or any free port) in `backend/.env`, run `npm run dev` from `backend/`, and set `EXPO_PUBLIC_API_URL` in `mobile/.env` to `http://192.168.40.74:8787` (this machine's LAN IP, discovered at boot). The mobile app fails loudly without `EXPO_PUBLIC_API_URL` once the upload/report paths run. (Verified 2026-07-21: orchestrator boots clean on the real `.env` at :8787 — `/health` 200, `/me` 401, poller started.)
 - [x] Sample climbing videos for M2 testing (needed by M2.19)
 - [x] Container registry choice/credentials for the ~20 GB analysis image (needed by M3.12) — Docker Hub `miggysmallz`, image pushed as `docker.io/miggysmallz/climbiq-analysis-job:v1` (public).
 
