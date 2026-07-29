@@ -38,6 +38,18 @@ export default function ClimbFormScreen() {
       </View>
     );
   }
+  // Don't fall through to a blank form on a load error — a blank form still
+  // carries the edit `id`, so "Save changes" would wipe the climb (M6.5).
+  if (isEdit && existing.isError) {
+    return (
+      <View style={styles.center}>
+        <ThemedText themeColor="textSecondary">Couldn&apos;t load this climb.</ThemedText>
+        <Pressable style={styles.retryButton} onPress={() => existing.refetch()}>
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
   return <ClimbForm id={isEdit ? id : undefined} initial={existing.data ?? null} />;
 }
 
@@ -193,7 +205,14 @@ function ClimbForm({ id, initial }: { id: string | undefined; initial: Climb | n
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24 },
+  retryButton: {
+    backgroundColor: '#208AEF',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  retryText: { color: '#fff', fontWeight: '600' },
   container: { padding: 16, paddingBottom: 48, gap: 6 },
   label: { fontSize: 14, fontWeight: '600', marginTop: 10 },
   input: {

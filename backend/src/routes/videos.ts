@@ -141,7 +141,23 @@ export function registerVideoRoutes(app: FastifyInstance): void {
         .insert({ video_id: videoId, report_id: reportId, status: 'queued' })
         .select('id')
         .single();
-      if (insErr) throw new Error(`analysis_jobs insert failed: ${insErr.message}`);
+      if (insErr) {
+        // Lost the race to a concurrent /analyze for the same video: the partial
+        // unique index (one active job per video) rejected this insert. Return the
+        // in-flight job rather than posting a second Nosana job (double charge).
+        if (insErr.code === '23505') {
+          const { data: raced } = await app.supabase
+            .from('analysis_jobs')
+            .select('id, status')
+            .eq('video_id', videoId)
+            .in('status', ['queued', 'posted', 'running'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (raced) return { job_id: raced.id, status: raced.status };
+        }
+        throw new Error(`analysis_jobs insert failed: ${insErr.message}`);
+      }
 
       try {
         await postAndRecordJob(app, createAnalysisJobPoster(nosanaConfig), {

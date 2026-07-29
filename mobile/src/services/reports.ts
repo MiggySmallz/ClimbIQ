@@ -1,8 +1,10 @@
 import type {
   AnalysisReport,
+  Observation,
   ReportArtifactsResponse,
   ReportRow,
   ReportVisibility,
+  Scores,
   Timeline,
   VideoStatus,
 } from '@climbiq/shared';
@@ -10,6 +12,7 @@ import type { VideoSource } from 'expo-video';
 
 import resultFixture from '@/dev/sample-report/result.json';
 import timelineFixture from '@/dev/sample-report/timeline.json';
+import type { TrendReport } from '@/lib/report-trends';
 import { supabase } from '@/lib/supabase';
 
 // Dev-only id that loads the bundled sample report (a real M2.19 run in
@@ -96,6 +99,48 @@ export async function getReportArtifacts(id: string): Promise<ReportArtifacts> {
   return { overlay: { uri: overlay_url }, timeline };
 }
 
+/** A friend's shared report as it appears in the feed (spec §6, M5.3). Only the
+ *  fields the card renders — never the raw video (§2 retention). */
+export interface FeedItem {
+  id: string;
+  grade_estimate: string | null;
+  scores: Scores;
+  observations: Observation[];
+  created_at: string;
+  author: { id: string; username: string; avatar_url: string | null };
+}
+
+/** Reverse-chron reports friends have shared with `visibility='friends'`. RLS
+ *  enforces the friends-only filter (spec §7.1); we just exclude our own rows,
+ *  which the owner policy would otherwise include. */
+export async function listFeedReports(myId: string): Promise<FeedItem[]> {
+  const { data, error } = await supabase
+    .from('reports')
+    .select(
+      'id, grade_estimate, scores, observations, created_at, author:profiles!reports_user_id_fkey(id, username, avatar_url)',
+    )
+    .eq('visibility', 'friends')
+    .neq('user_id', myId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return data as unknown as FeedItem[];
+}
+
+/** The signed-in user's own recent reports for the progress screen (spec §6,
+ *  M5.4). Returns oldest → newest so trend lines read left-to-right. Only the
+ *  fields the aggregation needs — never the raw video (§2 retention). */
+export async function listReportTrends(userId: string, limit = 10): Promise<TrendReport[]> {
+  const { data, error } = await supabase
+    .from('reports')
+    .select('id, created_at, observations, scores')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data as unknown as TrendReport[]).slice().reverse();
+}
+
 export async function setReportVisibility(
   id: string,
   visibility: ReportVisibility,
@@ -103,4 +148,23 @@ export async function setReportVisibility(
   if (id === SAMPLE_REPORT_ID) return; // sample has no DB row; UI updates cache only
   const { error } = await supabase.from('reports').update({ visibility }).eq('id', id);
   if (error) throw error;
+}
+
+/** Link a report to a journal climb — or pass null to unlink (spec §6/§11.6, M4.8).
+ *  Re-links both the report and its underlying video so the climb surfaces its
+ *  videos (spec §5). RLS lets only the owner update either row
+ *  (reports_owner_all, videos_update_own). */
+export async function setReportClimb(
+  id: string,
+  videoId: string,
+  climbId: string | null,
+): Promise<void> {
+  if (id === SAMPLE_REPORT_ID) return; // sample has no DB row; UI updates cache only
+  const { error } = await supabase.from('reports').update({ climb_id: climbId }).eq('id', id);
+  if (error) throw error;
+  const { error: videoError } = await supabase
+    .from('videos')
+    .update({ climb_id: climbId })
+    .eq('id', videoId);
+  if (videoError) throw videoError;
 }

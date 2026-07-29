@@ -1,10 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, Tabs } from 'expo-router';
 
+import { usePendingRequestCount } from '@/hooks/use-pending-requests';
 import { useAuth } from '@/lib/auth-context';
 
 export default function TabsLayout() {
   const { session, profile } = useAuth();
+  // Incoming friend-request count → badge on the Profile tab (M5.2b). Called
+  // unconditionally (before the redirects below) to keep hook order stable.
+  const pendingRequests = usePendingRequestCount();
 
   if (!session) return <Redirect href="/sign-in" />;
   if (!profile) return <Redirect href="/onboarding" />;
@@ -43,6 +47,7 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
+          tabBarBadge: pendingRequests > 0 ? pendingRequests : undefined,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-circle" color={color} size={size} />
           ),

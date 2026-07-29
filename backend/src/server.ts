@@ -5,6 +5,9 @@ import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import type { Config } from './config.js';
 import authPlugin from './plugins/auth.js';
 import { createR2Client } from './r2/client.js';
+import { registerAccountRoutes } from './routes/account.js';
+import { registerAdminRoutes } from './routes/admin.js';
+import { registerJobRoutes } from './routes/jobs.js';
 import { registerReportRoutes } from './routes/reports.js';
 import { registerVideoRoutes } from './routes/videos.js';
 
@@ -40,6 +43,9 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
 
   registerVideoRoutes(app);
   registerReportRoutes(app);
+  registerJobRoutes(app);
+  registerAccountRoutes(app);
+  registerAdminRoutes(app, config.ownerUserId);
 
   return app;
 }

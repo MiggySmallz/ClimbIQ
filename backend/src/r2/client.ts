@@ -13,8 +13,11 @@
 // Content-Length so a leaked URL can't be used to upload a larger object.
 
 import {
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -33,6 +36,11 @@ export function createR2Client(config: Config): S3Client {
   return new S3Client({
     region: 'auto',
     endpoint: `https://${config.r2AccountId}.r2.cloudflarestorage.com`,
+    // Path-style (endpoint/<bucket>/<key>), NOT virtual-hosted
+    // (<bucket>.endpoint/<key>). R2's TLS cert is a single-level wildcard
+    // (*.r2.cloudflarestorage.com), so a <bucket>.<account>.r2… host fails the
+    // TLS handshake on strict clients (e.g. the mobile app's BoringSSL).
+    forcePathStyle: true,
     credentials: {
       accessKeyId: config.r2AccessKeyId,
       secretAccessKey: config.r2SecretAccessKey,
@@ -137,6 +145,49 @@ export async function getObjectText(
   const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   if (!res.Body) throw new Error('empty object body');
   return res.Body.transformToString();
+}
+
+/** Delete a single object. Idempotent — S3/R2 returns success for a missing key,
+ *  so the retention sweep (M6.1) can safely re-run. */
+export async function deleteObject(client: S3Client, bucket: string, key: string): Promise<void> {
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+/** All object keys under a prefix (paginated). Used by account deletion to sweep
+ *  everything a user owns, including any orphans not tracked in Postgres (M6.4). */
+export async function listObjectKeys(
+  client: S3Client,
+  bucket: string,
+  prefix: string,
+): Promise<string[]> {
+  const keys: string[] = [];
+  let token: string | undefined;
+  do {
+    const res = await client.send(
+      new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }),
+    );
+    for (const obj of res.Contents ?? []) if (obj.Key) keys.push(obj.Key);
+    token = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (token);
+  return keys;
+}
+
+/** Delete many objects (chunked to the S3 1000-key-per-request limit). No-op on
+ *  an empty list. Idempotent, like deleteObject (M6.4 account deletion). */
+export async function deleteObjects(
+  client: S3Client,
+  bucket: string,
+  keys: string[],
+): Promise<void> {
+  for (let i = 0; i < keys.length; i += 1000) {
+    const chunk = keys.slice(i, i + 1000);
+    await client.send(
+      new DeleteObjectsCommand({
+        Bucket: bucket,
+        Delete: { Objects: chunk.map((Key) => ({ Key })), Quiet: true },
+      }),
+    );
+  }
 }
 
 /** Presigned GET URL for a single object. */

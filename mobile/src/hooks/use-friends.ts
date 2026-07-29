@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import * as friendsService from '@/services/friends';
 import type { FriendshipWithProfiles, ProfileLite } from '@/services/friends';
 
-const FRIENDSHIPS_KEY = ['friendships'];
+export const FRIENDSHIPS_KEY = ['friendships'];
 
 export function useFriendships() {
   return useQuery({ queryKey: FRIENDSHIPS_KEY, queryFn: friendsService.listFriendships });

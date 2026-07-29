@@ -1,8 +1,10 @@
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
 
+import { TechniqueProgress } from '@/components/technique-progress';
 import { ThemedText } from '@/components/themed-text';
 import { useClimbs } from '@/hooks/use-climbs';
+import { useReportTrends } from '@/hooks/use-report-trends';
 import { useAuth } from '@/lib/auth-context';
 import { gradePyramid, sendsPerMonth, totals } from '@/lib/climb-stats';
 import { useTheme } from '@/hooks/use-theme';
@@ -10,9 +12,10 @@ import { useTheme } from '@/hooks/use-theme';
 export default function HomeScreen() {
   const { profile } = useAuth();
   const theme = useTheme();
-  const { data, isPending, isError, refetch } = useClimbs();
+  const climbsQ = useClimbs();
+  const trendsQ = useReportTrends();
 
-  if (isPending) {
+  if (climbsQ.isPending) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" />
@@ -20,23 +23,30 @@ export default function HomeScreen() {
     );
   }
 
-  if (isError) {
+  if (climbsQ.isError) {
     return (
       <View style={styles.center}>
         <ThemedText themeColor="textSecondary">Couldn&apos;t load your stats.</ThemedText>
-        <Pressable style={styles.retryButton} onPress={() => refetch()}>
+        <Pressable style={styles.retryButton} onPress={() => climbsQ.refetch()}>
           <Text style={styles.retryText}>Retry</Text>
         </Pressable>
       </View>
     );
   }
 
-  if (data.length === 0) {
+  const data = climbsQ.data;
+  const hasClimbs = data.length > 0;
+  const noReports = (trendsQ.data?.length ?? 0) === 0;
+
+  // Full welcome only when there's genuinely nothing to show — no climbs AND no
+  // analyses — and the trends query has settled (so it never flashes then fills).
+  if (!hasClimbs && noReports && !trendsQ.isPending && !trendsQ.isError) {
     return (
       <View style={styles.center}>
         <ThemedText style={styles.greeting}>Welcome, {profile?.username} 🧗</ThemedText>
         <ThemedText themeColor="textSecondary" style={styles.hint}>
-          Log climbs in the Climbs tab and your stats will show up here.
+          Log climbs in the Climbs tab and analyze a video — your stats and technique
+          progress will show up here.
         </ThemedText>
       </View>
     );
@@ -49,27 +59,46 @@ export default function HomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.tiles}>
-        <View style={[styles.tile, { backgroundColor: theme.backgroundElement }]}>
-          <ThemedText style={styles.tileNumber}>{sends}</ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.tileLabel}>
-            sends
-          </ThemedText>
-        </View>
-        <View style={[styles.tile, { backgroundColor: theme.backgroundElement }]}>
-          <ThemedText style={styles.tileNumber}>{attempts}</ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.tileLabel}>
-            projects
-          </ThemedText>
-        </View>
-      </View>
-
-      {pyramid.length > 0 && (
+      {hasClimbs && (
         <>
-          <ThemedText style={styles.sectionTitle}>Grade pyramid</ThemedText>
+          <View style={styles.tiles}>
+            <View style={[styles.tile, { backgroundColor: theme.backgroundElement }]}>
+              <ThemedText style={styles.tileNumber}>{sends}</ThemedText>
+              <ThemedText themeColor="textSecondary" style={styles.tileLabel}>
+                sends
+              </ThemedText>
+            </View>
+            <View style={[styles.tile, { backgroundColor: theme.backgroundElement }]}>
+              <ThemedText style={styles.tileNumber}>{attempts}</ThemedText>
+              <ThemedText themeColor="textSecondary" style={styles.tileLabel}>
+                projects
+              </ThemedText>
+            </View>
+          </View>
+
+          {pyramid.length > 0 && (
+            <>
+              <ThemedText style={styles.sectionTitle}>Grade pyramid</ThemedText>
+              <BarChart
+                data={pyramid.map((p) => ({ value: p.count, label: p.grade }))}
+                frontColor="#208AEF"
+                barBorderRadius={4}
+                barWidth={26}
+                spacing={14}
+                xAxisLabelTextStyle={axisStyle}
+                yAxisTextStyle={axisStyle}
+                yAxisThickness={0}
+                xAxisThickness={0}
+                noOfSections={3}
+                isAnimated
+              />
+            </>
+          )}
+
+          <ThemedText style={styles.sectionTitle}>Sends — last 6 months</ThemedText>
           <BarChart
-            data={pyramid.map((p) => ({ value: p.count, label: p.grade }))}
-            frontColor="#208AEF"
+            data={monthly.map((m) => ({ value: m.count, label: m.label }))}
+            frontColor="#30A46C"
             barBorderRadius={4}
             barWidth={26}
             spacing={14}
@@ -83,20 +112,7 @@ export default function HomeScreen() {
         </>
       )}
 
-      <ThemedText style={styles.sectionTitle}>Sends — last 6 months</ThemedText>
-      <BarChart
-        data={monthly.map((m) => ({ value: m.count, label: m.label }))}
-        frontColor="#30A46C"
-        barBorderRadius={4}
-        barWidth={26}
-        spacing={14}
-        xAxisLabelTextStyle={axisStyle}
-        yAxisTextStyle={axisStyle}
-        yAxisThickness={0}
-        xAxisThickness={0}
-        noOfSections={3}
-        isAnimated
-      />
+      <TechniqueProgress query={trendsQ} />
     </ScrollView>
   );
 }

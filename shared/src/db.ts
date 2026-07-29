@@ -65,6 +65,9 @@ export interface AnalysisJob {
   error: string | null;
   posted_at: string | null;
   finished_at: string | null;
+  /** Total Nosana Credits cost (USD) across attempts; null until first post
+   *  (spec §8.3, M6.2). */
+  cost_usd: number | null;
   created_at: string;
 }
 

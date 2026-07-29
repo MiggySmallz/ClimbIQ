@@ -41,6 +41,13 @@ export type NosanaJobState = 'queued' | 'running' | 'completed' | 'stopped' | 'u
 /** Nosana JobState enum order (index == on-chain numeric value). */
 const STATE_BY_INDEX: NosanaJobState[] = ['queued', 'running', 'completed', 'stopped'];
 
+/** True for a Nosana API "not found" (404 / NOT_FOUND) — a job that isn't
+ *  retrievable yet (or ever). Lets the poller treat it as not-yet-visible. */
+function isNotFound(err: unknown): boolean {
+  const e = err as { statusCode?: number; code?: string } | null;
+  return e?.statusCode === 404 || e?.code === 'NOT_FOUND';
+}
+
 /** Map whatever `job.state` the API returns (string enum or numeric) to our set. */
 function normalizeJobState(state: unknown): NosanaJobState {
   if (typeof state === 'number') return STATE_BY_INDEX[state] ?? 'unknown';
@@ -88,6 +95,9 @@ export function createAnalysisJobPoster(
       ipfsHash,
       market: config.market,
       timeout: config.timeoutSeconds,
+      // Pin to a specific node within the market when configured (dev warm-node);
+      // omit for normal market-wide assignment.
+      ...(config.node ? { node: config.node } : {}),
     });
 
     return {
@@ -100,8 +110,18 @@ export function createAnalysisJobPoster(
   }
 
   async function getJobState(jobId: string): Promise<NosanaJobState> {
-    const job = (await client.api.jobs.get(jobId)) as { state?: unknown };
-    return normalizeJobState(job.state);
+    try {
+      const job = (await client.api.jobs.get(jobId)) as { state?: unknown };
+      return normalizeJobState(job.state);
+    } catch (err) {
+      // A freshly-posted job isn't immediately retrievable — the Nosana API 404s
+      // until the on-chain job account is indexed (seen for ~1 min after post).
+      // Treat "not found" as not-yet-visible ('unknown') so the poller waits
+      // instead of erroring every tick; a job that never appears is still caught
+      // by the poller's per-attempt timeout budget (§8.3).
+      if (isNotFound(err)) return 'unknown';
+      throw err;
+    }
   }
 
   return { postAnalysisJob, getJobState };

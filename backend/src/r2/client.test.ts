@@ -22,6 +22,7 @@ const config: Config = {
   r2AccessKeyId: 'AKIAEXAMPLE',
   r2SecretAccessKey: 'secretexample',
   r2Bucket: 'climbiq',
+  ownerUserId: null,
 };
 
 const client = createR2Client(config);
@@ -33,11 +34,12 @@ test('key builders follow the §9 R2 layout', () => {
   assert.equal(reportTimelineKey('rep-1'), 'reports/rep-1/timeline.json');
 });
 
-test('presigned URLs target the account endpoint, bucket and key', async () => {
+test('presigned URLs are path-style on the account endpoint (R2 TLS cert)', async () => {
   const url = new URL(await presignGet(client, config.r2Bucket, videoKey('u', 'v')));
-  // AWS SDK defaults to virtual-hosted style; R2 supports it.
-  assert.equal(url.hostname, 'climbiq.acct123.r2.cloudflarestorage.com');
-  assert.equal(url.pathname, '/videos/u/v.mp4');
+  // Path-style: the account host is one level under r2.cloudflarestorage.com so
+  // the *.r2.cloudflarestorage.com cert covers it; the bucket is in the path.
+  assert.equal(url.hostname, 'acct123.r2.cloudflarestorage.com');
+  assert.equal(url.pathname, '/climbiq/videos/u/v.mp4');
   assert.ok(url.searchParams.get('X-Amz-Signature'));
 });
 

@@ -238,7 +238,8 @@ function ReadyState({
       const { job_id } = await requestAnalysis(id);
       setJobId(job_id);
       setPhase('started');
-    } catch {
+    } catch (e) {
+      console.error('[analyze] startAnalysis failed:', e); // TEMP diagnostic
       setPhase('error');
     }
   }

@@ -11,6 +11,10 @@ export interface Config {
   r2AccessKeyId: string;
   r2SecretAccessKey: string;
   r2Bucket: string;
+  /** Optional: the project owner's Supabase user id. When set, unlocks the
+   *  owner-only cost summary at `GET /admin/usage` (spec §8.3, M6.2). Unset =
+   *  the endpoint is off (404 for everyone). */
+  ownerUserId: string | null;
 }
 
 const REQUIRED = [
@@ -36,6 +40,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     r2AccessKeyId: env.R2_ACCESS_KEY_ID as string,
     r2SecretAccessKey: env.R2_SECRET_ACCESS_KEY as string,
     r2Bucket: env.R2_BUCKET as string,
+    ownerUserId: env.OWNER_USER_ID ?? null,
   };
 }
 
@@ -54,8 +59,15 @@ export interface NosanaConfig {
   image: string;
   /** Job timeout (s) handed to the market; poller enforces the 20-min budget (§8.3). */
   timeoutSeconds: number;
-  /** Pose sample rate baked into JOB_PARAMS (§8.1 ~3 fps). */
+  /** Pose sample rate baked into JOB_PARAMS. Default 30 fps: smooth overlay
+   * playback + fine temporal resolution for dynamic moves, at ~10x the pose
+   * GPU time of the original 3 fps (owner decision 2026-07-22). */
   sampleFps: number;
+  /** Optional specific node address to run on (within `market`). When set, the
+   * job is posted targeting only that node instead of any node in the market —
+   * for pinning to a known-warm/owned node in dev. The node must be staked and
+   * running in `market`; unset = normal market-wide assignment (§8.1). */
+  node?: string;
 }
 
 const NOSANA_REQUIRED = ['NOSANA_API_KEY', 'NOSANA_MARKET', 'ANALYSIS_IMAGE'] as const;
@@ -70,6 +82,7 @@ export function loadNosanaConfig(env: NodeJS.ProcessEnv = process.env): NosanaCo
     market: env.NOSANA_MARKET as string,
     image: env.ANALYSIS_IMAGE as string,
     timeoutSeconds: Number(env.NOSANA_JOB_TIMEOUT_S ?? 1800),
-    sampleFps: Number(env.ANALYSIS_SAMPLE_FPS ?? 3),
+    sampleFps: Number(env.ANALYSIS_SAMPLE_FPS ?? 30),
+    node: env.NOSANA_NODE || undefined,
   };
 }

@@ -56,6 +56,14 @@ export async function postAndRecordJob(
     urls,
     params: { video_id: input.videoId, sample_fps: input.sampleFps, declared_grade: null },
   });
+  // Accumulate cost across attempts — each post charges Credits, so a retried
+  // job's spend is the sum, not just the last run's (§8.3 cost logging, M6.2).
+  const { data: prior } = await app.supabase
+    .from('analysis_jobs')
+    .select('cost_usd')
+    .eq('id', input.jobRowId)
+    .maybeSingle();
+  const totalCost = (prior?.cost_usd ?? 0) + posted.costUsd;
   const { error } = await app.supabase
     .from('analysis_jobs')
     .update({
@@ -63,6 +71,7 @@ export async function postAndRecordJob(
       nosana_market: posted.market,
       status: 'posted',
       posted_at: new Date().toISOString(),
+      cost_usd: totalCost,
     })
     .eq('id', input.jobRowId);
   if (error) throw new Error(`analysis_jobs update failed: ${error.message}`);

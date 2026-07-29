@@ -8,7 +8,6 @@ import {
   type CreateVideoResponse,
 } from '@climbiq/shared';
 import { File, UploadType } from 'expo-file-system';
-import { Asset, requestPermissionsAsync } from 'expo-media-library';
 
 import { apiFetch } from '@/lib/api';
 
@@ -46,14 +45,22 @@ export async function uploadToR2(
   onProgress: (fraction: number) => void,
 ): Promise<void> {
   const file = new File(fileUri);
-  const result = await file.upload(uploadUrl, {
-    httpMethod: 'PUT',
-    uploadType: UploadType.BINARY_CONTENT,
-    onProgress: ({ bytesSent, totalBytes }) => {
-      if (totalBytes > 0) onProgress(Math.min(1, bytesSent / totalBytes));
-    },
-  });
+  console.log('[R2 upload] PUT', uploadUrl.split('?')[0], 'size', file.size); // TEMP diagnostic
+  let result;
+  try {
+    result = await file.upload(uploadUrl, {
+      httpMethod: 'PUT',
+      uploadType: UploadType.BINARY_CONTENT,
+      onProgress: ({ bytesSent, totalBytes }) => {
+        if (totalBytes > 0) onProgress(Math.min(1, bytesSent / totalBytes));
+      },
+    });
+  } catch (e) {
+    console.error('[R2 upload] threw before response:', e); // TEMP diagnostic
+    throw e;
+  }
   if (result.status < 200 || result.status >= 300) {
+    console.error('[R2 upload] HTTP', result.status, '\nbody:', result.body); // TEMP diagnostic
     throw new Error(`upload_failed_${result.status}`);
   }
   onProgress(1);
@@ -64,12 +71,20 @@ export async function requestAnalysis(videoId: string): Promise<AnalyzeVideoResp
   return apiFetch<AnalyzeVideoResponse>(`/videos/${videoId}/analyze`, { method: 'POST' });
 }
 
+/** M3.9 — user-initiated re-run of a failed job (same video, no re-upload). */
+export async function retryAnalysis(jobId: string): Promise<AnalyzeVideoResponse> {
+  return apiFetch<AnalyzeVideoResponse>(`/jobs/${jobId}/retry`, { method: 'POST' });
+}
+
 /**
  * Save an in-app recording to the device gallery (spec §6 — the server copy
  * expires, this is the user's permanent raw video). Returns false if permission
  * is denied. Throws only on unexpected failures.
  */
 export async function saveToGallery(fileUri: string): Promise<boolean> {
+  // Lazy-import so a missing native module never breaks the upload path — this is
+  // an optional convenience, not part of the critical flow.
+  const { Asset, requestPermissionsAsync } = await import('expo-media-library');
   const { granted } = await requestPermissionsAsync();
   if (!granted) return false;
   await Asset.create(fileUri);

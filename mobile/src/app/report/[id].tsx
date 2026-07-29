@@ -1,14 +1,30 @@
-import type { Observation, ReportRow, ReportVisibility } from '@climbiq/shared';
+import type { Climb, Observation, ReportRow, ReportVisibility } from '@climbiq/shared';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEvent } from 'expo';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { BiomechChart } from '@/components/biomech-chart';
 import { ThemedText } from '@/components/themed-text';
-import { useReport, useReportArtifacts, useSetReportVisibility } from '@/hooks/use-report';
+import { useAuth } from '@/lib/auth-context';
+import { useClimbs } from '@/hooks/use-climbs';
+import {
+  useReport,
+  useReportArtifacts,
+  useSetReportClimb,
+  useSetReportVisibility,
+} from '@/hooks/use-report';
 import { useTheme } from '@/hooks/use-theme';
 import {
   issueLabel,
@@ -75,6 +91,12 @@ function ReportContent({
   report: ReportRow;
   videoExpiresAt: string | null;
 }) {
+  const { session } = useAuth();
+  // Owner-only affordances (sharing controls, retention notice). A friend viewing
+  // a shared report from their feed (M5.3) is read-only; the sample report has no
+  // real row, so treat it as owned for the dev preview.
+  const isOwner = reportId === SAMPLE_REPORT_ID || session?.user.id === report.user_id;
+
   const artifactsQ = useReportArtifacts(reportId);
   // Issue-card taps (rendered here, from the report row) drive the video player
   // (mounted below, only once its artifacts load) via this ref.
@@ -148,9 +170,17 @@ function ReportContent({
         </Section>
       )}
 
-      <ShareSection reportId={reportId} visibility={report.visibility} />
+      {isOwner && (
+        <ClimbLinkSection
+          reportId={reportId}
+          videoId={report.video_id}
+          climbId={report.climb_id}
+        />
+      )}
 
-      <ExpirySection expiresAt={videoExpiresAt} />
+      {isOwner && <ShareSection reportId={reportId} visibility={report.visibility} />}
+
+      {isOwner && <ExpirySection expiresAt={videoExpiresAt} />}
 
       <ThemedText themeColor="textSecondary" type="small" style={styles.attribution}>
         Analysis by {report.llm_model} · scores + grade are beta
@@ -379,6 +409,190 @@ function ShareSection({
   );
 }
 
+function ClimbLinkSection({
+  reportId,
+  videoId,
+  climbId,
+}: {
+  reportId: string;
+  videoId: string;
+  climbId: string | null;
+}) {
+  const theme = useTheme();
+  const [picking, setPicking] = useState(false);
+  const climbsQ = useClimbs();
+  const setClimb = useSetReportClimb(reportId, videoId);
+
+  const linked = climbId ? climbsQ.data?.find((c) => c.id === climbId) ?? null : null;
+
+  function choose(id: string | null) {
+    setPicking(false);
+    if (id !== climbId) setClimb.mutate(id);
+  }
+
+  return (
+    <Section title="Journal climb">
+      {climbId && !linked && climbsQ.isSuccess ? (
+        // Linked to a climb that no longer exists (deleted → climb_id set null
+        // server-side, but our cache may lag). Offer to relink.
+        <ThemedText themeColor="textSecondary" type="small">
+          Linked climb was removed.
+        </ThemedText>
+      ) : null}
+
+      {linked ? (
+        <View style={[styles.linkedRow, { backgroundColor: theme.backgroundElement }]}>
+          <Ionicons name="link" size={18} color={theme.textSecondary} />
+          <View style={styles.flex}>
+            <ThemedText type="smallBold" numberOfLines={1}>
+              {linked.name}
+            </ThemedText>
+            <ThemedText themeColor="textSecondary" type="small" numberOfLines={1}>
+              {[linked.grade, linked.location, linked.attempted_at].filter(Boolean).join(' · ')}
+            </ThemedText>
+          </View>
+          <Pressable
+            hitSlop={8}
+            disabled={setClimb.isPending}
+            onPress={() => setClimb.mutate(null)}>
+            <Ionicons name="close-circle" size={22} color={theme.textSecondary} />
+          </Pressable>
+        </View>
+      ) : (
+        <ThemedText themeColor="textSecondary" type="small">
+          Link this analysis to a climb in your journal to track it over time.
+        </ThemedText>
+      )}
+
+      <Pressable
+        disabled={setClimb.isPending}
+        onPress={() => setPicking(true)}
+        style={[styles.linkButton, { borderColor: theme.textSecondary }]}>
+        {setClimb.isPending ? (
+          <ActivityIndicator />
+        ) : (
+          <>
+            <Ionicons
+              name={linked ? 'swap-horizontal' : 'add'}
+              size={16}
+              color={theme.text}
+            />
+            <ThemedText type="smallBold">{linked ? 'Change climb' : 'Link a climb'}</ThemedText>
+          </>
+        )}
+      </Pressable>
+
+      <ClimbPickerModal
+        visible={picking}
+        climbsQ={climbsQ}
+        selectedId={climbId}
+        onClose={() => setPicking(false)}
+        onChoose={choose}
+      />
+    </Section>
+  );
+}
+
+function ClimbPickerModal({
+  visible,
+  climbsQ,
+  selectedId,
+  onClose,
+  onChoose,
+}: {
+  visible: boolean;
+  climbsQ: ReturnType<typeof useClimbs>;
+  selectedId: string | null;
+  onClose: () => void;
+  onChoose: (id: string | null) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable
+          style={[styles.modalSheet, { backgroundColor: theme.background }]}
+          onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalHeader}>
+            <ThemedText style={styles.modalTitle}>Link to a climb</ThemedText>
+            <Pressable hitSlop={8} onPress={onClose}>
+              <Ionicons name="close" size={24} color={theme.textSecondary} />
+            </Pressable>
+          </View>
+
+          {climbsQ.isPending ? (
+            <View style={styles.modalCenter}>
+              <ActivityIndicator size="large" />
+            </View>
+          ) : climbsQ.isError ? (
+            <View style={styles.modalCenter}>
+              <ThemedText themeColor="textSecondary">Couldn&apos;t load your climbs.</ThemedText>
+              <Pressable style={styles.retryButton} onPress={() => climbsQ.refetch()}>
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : climbsQ.data.length === 0 ? (
+            <View style={styles.modalCenter}>
+              <ThemedText style={styles.emptyTitle}>No climbs yet</ThemedText>
+              <ThemedText themeColor="textSecondary" style={styles.emptyHint}>
+                Log a climb in your journal first, then link this analysis to it.
+              </ThemedText>
+              <Pressable
+                style={styles.retryButton}
+                onPress={() => {
+                  onClose();
+                  router.push('/climb-form');
+                }}>
+                <Text style={styles.retryText}>Log a climb</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <FlatList
+              data={climbsQ.data}
+              keyExtractor={(c) => c.id}
+              contentContainerStyle={styles.modalList}
+              renderItem={({ item }) => (
+                <ClimbPickerRow
+                  climb={item}
+                  selected={item.id === selectedId}
+                  onPress={() => onChoose(item.id)}
+                />
+              )}
+            />
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function ClimbPickerRow({
+  climb,
+  selected,
+  onPress,
+}: {
+  climb: Climb;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.pickerRow, selected && { backgroundColor: theme.backgroundSelected }]}>
+      <View style={styles.flex}>
+        <ThemedText type="smallBold" numberOfLines={1}>
+          {climb.name}
+        </ThemedText>
+        <ThemedText themeColor="textSecondary" type="small" numberOfLines={1}>
+          {[climb.grade, climb.location, climb.attempted_at].filter(Boolean).join(' · ')}
+        </ThemedText>
+      </View>
+      {selected && <Ionicons name="checkmark-circle" size={20} color="#208AEF" />}
+    </Pressable>
+  );
+}
+
 function ExpirySection({ expiresAt }: { expiresAt: string | null }) {
   const theme = useTheme();
   return (
@@ -498,6 +712,51 @@ const styles = StyleSheet.create({
   },
   segmentLabel: { fontSize: 15, fontWeight: '600' },
   shareHint: { marginTop: 2 },
+
+  linkedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 10,
+    padding: 12,
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 11,
+    marginTop: 4,
+  },
+
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000066' },
+  modalSheet: {
+    maxHeight: '70%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  modalTitle: { fontSize: 17, fontWeight: '600' },
+  modalCenter: { alignItems: 'center', justifyContent: 'center', gap: 8, padding: 32 },
+  modalList: { paddingHorizontal: 8, paddingBottom: 8 },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
 
   expiry: {
     flexDirection: 'row',

@@ -35,3 +35,15 @@ export function useSetReportVisibility(id: string) {
     },
   });
 }
+
+export function useSetReportClimb(id: string, videoId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (climbId: string | null) => reportsService.setReportClimb(id, videoId, climbId),
+    onSuccess: (_data, climbId) => {
+      qc.setQueryData<ReportDetail>([...REPORT_KEY, id], (prev) =>
+        prev ? { ...prev, report: { ...prev.report, climb_id: climbId } } : prev,
+      );
+    },
+  });
+}

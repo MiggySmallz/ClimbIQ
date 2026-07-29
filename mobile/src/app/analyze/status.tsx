@@ -1,12 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { JobStatus } from '@climbiq/shared';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
 import { useJobStatus } from '@/hooks/use-job-status';
+import { retryAnalysis } from '@/services/uploads';
 
 // The three "in progress" steps the user sees (spec §6). done/error are terminal.
 const STEPS: { key: JobStatus; label: string; hint: string }[] = [
@@ -31,6 +32,21 @@ export default function JobStatusScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const { job, error } = useJobStatus(jobId);
   const status = job?.status;
+  const [retrying, setRetrying] = useState(false);
+
+  // M3.9 — re-run this failed job on the same uploaded clip. The realtime hook
+  // picks the row back up as it moves through queued → posted → running again.
+  async function onRetry() {
+    if (!jobId || retrying) return;
+    setRetrying(true);
+    try {
+      await retryAnalysis(jobId);
+    } catch {
+      Alert.alert('Could not retry', "We couldn't start the analysis again. Please try later.");
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   // On completion, hand off to the report screen (spec §6).
   useEffect(() => {
@@ -52,12 +68,26 @@ export default function JobStatusScreen() {
 
   if (status === 'error' || status === 'timeout') {
     return (
-      <Terminal
-        icon="close-circle"
-        color="#E5484D"
-        title="Analysis failed"
-        hint="Something went wrong analyzing this climb. You can try analyzing it again from the Analyze tab."
-      />
+      <View style={styles.center}>
+        <Ionicons name="close-circle" size={44} color="#E5484D" />
+        <ThemedText style={styles.title}>Analysis failed</ThemedText>
+        <ThemedText themeColor="textSecondary" style={[styles.hint, { textAlign: 'center' }]}>
+          Something went wrong analyzing this climb. You can try again — your clip is still
+          uploaded, so this won&apos;t re-upload it.
+        </ThemedText>
+        <Pressable style={styles.primary} onPress={onRetry} disabled={retrying}>
+          {retrying ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.primaryText}>Try again</Text>
+          )}
+        </Pressable>
+        <Pressable style={styles.secondary} onPress={() => router.replace('/(tabs)/analyze')}>
+          <ThemedText themeColor="textSecondary" type="smallBold">
+            Back to Analyze
+          </ThemedText>
+        </Pressable>
+      </View>
     );
   }
 
@@ -177,4 +207,5 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   primaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  secondary: { alignItems: 'center', justifyContent: 'center', paddingVertical: 12, marginTop: 4 },
 });

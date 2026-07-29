@@ -62,7 +62,10 @@
           "savePhotosPermission": "ClimbIQ saves your climbing clips to your photo library.",
           "isAccessMediaLocationEnabled": false
         }
-      ]
+      ],
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

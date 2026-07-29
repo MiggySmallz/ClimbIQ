@@ -11,8 +11,12 @@ import { ingestReport, type JobVideo } from './reports/ingest.js';
 import type { FastifyInstance } from 'fastify';
 
 const POLL_INTERVAL_MS = 30_000;
-const JOB_TIMEOUT_MS = 20 * 60_000; // 20 min budget per attempt (§8.3)
 const MAX_ATTEMPTS = 3; // initial + 2 retries (§8.3)
+// Per-attempt budget before the poller declares a timeout. Derived from the
+// configured Nosana job timeout (NOSANA_JOB_TIMEOUT_S) so a slow cold-node run
+// isn't killed before the market itself would, plus a 5-min grace for polling
+// lag (§8.3).
+const TIMEOUT_GRACE_MS = 5 * 60_000;
 
 type FailReason = 'stopped' | 'timeout' | 'bad_output';
 
@@ -63,10 +67,11 @@ async function tick(app: FastifyInstance): Promise<void> {
     return;
   }
 
+  const budgetMs = nosanaConfig.timeoutSeconds * 1000 + TIMEOUT_GRACE_MS;
   const jobs = (data ?? []) as unknown as PollJob[];
   for (const job of jobs) {
     try {
-      await handleJob(app, poster, job, nosanaConfig.sampleFps);
+      await handleJob(app, poster, job, nosanaConfig.sampleFps, budgetMs);
     } catch (err) {
       app.log.error(err, `poller: job ${job.id} failed`);
     }
@@ -78,6 +83,7 @@ async function handleJob(
   poster: AnalysisJobPoster,
   job: PollJob,
   sampleFps: number,
+  budgetMs: number,
 ): Promise<void> {
   if (!job.nosana_job_id || !job.report_id || !job.videos) return;
   const state = await poster.getJobState(job.nosana_job_id);
@@ -105,7 +111,7 @@ async function handleJob(
   if (state === 'running' && job.status !== 'running') {
     await app.supabase.from('analysis_jobs').update({ status: 'running' }).eq('id', job.id);
   }
-  if (job.posted_at && Date.now() - Date.parse(job.posted_at) > JOB_TIMEOUT_MS) {
+  if (job.posted_at && Date.now() - Date.parse(job.posted_at) > budgetMs) {
     await failJob(app, poster, job, 'timeout', sampleFps);
   }
 }

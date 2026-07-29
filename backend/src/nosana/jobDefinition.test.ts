@@ -18,8 +18,11 @@ function opArgs(def: JobDefinition): { image: string; gpu: boolean; env: Record<
 }
 
 function jobParams(def: JobDefinition): Record<string, unknown> {
-  const raw = opArgs(def).env.JOB_PARAMS;
-  assert.ok(raw, 'expected JOB_PARAMS');
+  const encoded = opArgs(def).env.JOB_PARAMS;
+  assert.ok(encoded, 'expected JOB_PARAMS');
+  // JOB_PARAMS is base64-encoded JSON (see buildEnv: Nosana mangles raw-JSON env
+  // values in transit to the container, so we encode to survive it).
+  const raw = Buffer.from(encoded, 'base64').toString('utf-8');
   return JSON.parse(raw);
 }
 
@@ -48,7 +51,7 @@ test('builds a single-op container/run GPU job on the given image', () => {
   assert.equal(args.gpu, true);
 });
 
-test('env carries exactly the entrypoint contract, with JOB_PARAMS as JSON', () => {
+test('env carries exactly the entrypoint contract, with JOB_PARAMS as base64 JSON', () => {
   const def = buildAnalysisJobDefinition(baseInput);
   const env = opArgs(def).env;
 
@@ -63,6 +66,13 @@ test('env carries exactly the entrypoint contract, with JOB_PARAMS as JSON', () 
   assert.equal(env.RESULT_PUT_URL, baseInput.urls.resultPutUrl);
   assert.equal(env.OVERLAY_PUT_URL, baseInput.urls.overlayPutUrl);
   assert.equal(env.TIMELINE_PUT_URL, baseInput.urls.timelinePutUrl);
+
+  // JOB_PARAMS must be base64, not raw JSON — a raw `{...}` value gets mangled
+  // by the Nosana node in transit to the container (regression guard).
+  const encoded = env.JOB_PARAMS;
+  assert.ok(encoded, 'expected JOB_PARAMS');
+  assert.match(encoded, /^[A-Za-z0-9+/]+={0,2}$/);
+  assert.ok(!encoded.startsWith('{'), 'JOB_PARAMS must not be raw JSON');
   assert.deepEqual(jobParams(def), baseInput.params);
 });
 

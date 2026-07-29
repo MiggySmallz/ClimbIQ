@@ -32,10 +32,35 @@ export interface CreateVideoResponse {
   upload_url: string;
 }
 
-/** Response of `POST /videos/:id/analyze`. */
+/** Response of `POST /videos/:id/analyze` and `POST /jobs/:id/retry`. */
 export interface AnalyzeVideoResponse {
   job_id: string;
   status: JobStatus;
+}
+
+/** Platforms we register Expo push tokens for (spec §7.2, M3.9/M3.17). */
+export type PushPlatform = 'ios' | 'android';
+
+/** Body of `POST /push/register` — an Expo push token for the current device. */
+export interface RegisterPushRequest {
+  /** Expo push token, e.g. `ExponentPushToken[…]`. */
+  token: string;
+  platform: PushPlatform;
+}
+
+/** Response of `GET /admin/usage` — owner-only Nosana spend summary (spec §8.3,
+ *  M6.2). Aggregated across all analysis jobs. */
+export interface AdminUsageResponse {
+  jobs_total: number;
+  jobs_done: number;
+  /** Terminal failures (error + timeout). */
+  jobs_failed: number;
+  /** Total Credits spent across all jobs (USD). */
+  cost_usd_total: number;
+  /** Credits spent in the last 30 days (USD). */
+  cost_usd_30d: number;
+  /** Mean wall-clock duration of completed jobs (s), or null if none finished. */
+  avg_duration_s: number | null;
 }
 
 /** Response of `GET /reports/:id/artifacts` — short-lived signed R2 GET URLs for

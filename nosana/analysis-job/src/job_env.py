@@ -1,6 +1,8 @@
 # Entrypoint env-var contract (spec §8.1): everything the job needs arrives
 # via env vars. URLs are presigned HTTP(S) in production; file:// or plain
 # local paths behind the same interface for local dev.
+import base64
+import binascii
 import json
 import os
 from dataclasses import dataclass
@@ -35,7 +37,15 @@ def _require(name: str) -> str:
 
 
 def load_job_env() -> JobEnv:
-    raw_params = _require('JOB_PARAMS')
+    # JOB_PARAMS is base64-encoded JSON, not raw JSON: a raw `{...}` value is
+    # valid JSON and Nosana's node corrupts a JSON-object-looking env var in
+    # transit to the container. base64 (kept out of that transformation) arrives
+    # intact. Encoded by buildEnv in backend/src/nosana/jobDefinition.ts.
+    encoded = _require('JOB_PARAMS')
+    try:
+        raw_params = base64.b64decode(encoded, validate=True).decode('utf-8')
+    except (binascii.Error, ValueError, UnicodeDecodeError) as e:
+        raise JobEnvError(f'JOB_PARAMS is not valid base64: {e}') from e
     try:
         parsed = json.loads(raw_params)
     except json.JSONDecodeError as e:
@@ -47,7 +57,7 @@ def load_job_env() -> JobEnv:
     if not isinstance(video_id, str) or not video_id:
         raise JobEnvError('JOB_PARAMS.video_id must be a non-empty string')
 
-    sample_fps = parsed.get('sample_fps', 3.0)
+    sample_fps = parsed.get('sample_fps', 30.0)
     if not isinstance(sample_fps, (int, float)) or sample_fps <= 0:
         raise JobEnvError('JOB_PARAMS.sample_fps must be a positive number')
 

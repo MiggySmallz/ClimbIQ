@@ -44,3 +44,21 @@ export async function apiFetch<T>(
   }
   return (await res.json()) as T;
 }
+
+/** Orchestrator request with no response body (e.g. a 204). Throws on non-2xx. */
+export async function apiVoid(
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<void> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: init.method ?? 'GET',
+    headers: {
+      Authorization: await authHeader(),
+      ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  if (!res.ok) {
+    throw new Error(`api_error_${res.status}`);
+  }
+}
