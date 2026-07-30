@@ -41,6 +41,13 @@ export function createR2Client(config: Config): S3Client {
     // (*.r2.cloudflarestorage.com), so a <bucket>.<account>.r2… host fails the
     // TLS handshake on strict clients (e.g. the mobile app's BoringSSL).
     forcePathStyle: true,
+    // AWS SDK v3 (≥3.729) adds a default CRC32 request checksum to PutObject.
+    // That makes the presigned PUT require an x-amz-checksum-crc32 header the
+    // uploading client (phone / job container) never sends, so R2 rejects it
+    // with 403 AccessDenied. WHEN_REQUIRED restores the older behavior: only
+    // checksum when the operation actually mandates it (spec §8.2 upload path).
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
     credentials: {
       accessKeyId: config.r2AccessKeyId,
       secretAccessKey: config.r2SecretAccessKey,
