@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AdminCard } from '@/components/admin-card';
 import { Avatar } from '@/components/avatar';
 import { ThemedText } from '@/components/themed-text';
 import { usePendingRequestCount } from '@/hooks/use-pending-requests';
@@ -71,7 +72,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
       <Pressable onPress={handleChangeAvatar} style={styles.avatarWrap}>
         {avatarBusy ? (
           <View style={styles.avatarBusy}>
@@ -111,6 +112,9 @@ export default function ProfileScreen() {
         </Pressable>
       )}
 
+      {/* Owner-only: hidden for everyone whose /admin/usage call 404s (M6.3). */}
+      <AdminCard />
+
       <Pressable style={styles.signOutButton} onPress={handleSignOut} disabled={busy || deleting}>
         {busy ? <ActivityIndicator /> : <Text style={styles.signOutText}>Sign out</Text>}
       </Pressable>
@@ -125,12 +129,12 @@ export default function ProfileScreen() {
           <Text style={styles.deleteText}>Delete account</Text>
         )}
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', paddingTop: 48, padding: 24, gap: 8 },
+  container: { flexGrow: 1, alignItems: 'center', paddingTop: 48, padding: 24, gap: 8 },
   avatarWrap: { alignItems: 'center', gap: 8, marginBottom: 8 },
   avatarBusy: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
   username: { fontSize: 24, lineHeight: 30, fontWeight: '700' },

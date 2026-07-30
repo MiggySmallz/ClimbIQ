@@ -45,7 +45,7 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
   registerReportRoutes(app);
   registerJobRoutes(app);
   registerAccountRoutes(app);
-  registerAdminRoutes(app, config.ownerUserId);
+  registerAdminRoutes(app, config.ownerUserId, config.creditsAlertUsd);
 
   return app;
 }

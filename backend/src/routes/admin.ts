@@ -1,14 +1,17 @@
-// Owner-only ops routes (spec §8.3, M6.2).
+// Owner-only ops routes (spec §8.3, M6.2/M6.3).
 //
-//   GET /admin/usage → Nosana spend + job-outcome summary across all jobs.
+//   GET /admin/usage → Nosana spend + job-outcome summary across all jobs,
+//                      plus the live Credits balance + low-balance threshold.
 //
 // Gated to a single configured project-owner user id (OWNER_USER_ID). When that
 // is unset, or the caller isn't the owner, the route 404s — it isn't advertised.
 // Aggregation is done in-process: this is a personal-scale app with low job
 // volume; move to a SQL view/rpc if that ever stops being true.
 
-import type { AdminUsageResponse } from '@climbiq/shared';
+import type { AdminUsageResponse, CreditsBalance } from '@climbiq/shared';
 import type { FastifyInstance } from 'fastify';
+
+import { fetchCreditsBalance } from '../nosana/credits.js';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -19,7 +22,11 @@ interface UsageRow {
   finished_at: string | null;
 }
 
-export function registerAdminRoutes(app: FastifyInstance, ownerUserId: string | null): void {
+export function registerAdminRoutes(
+  app: FastifyInstance,
+  ownerUserId: string | null,
+  creditsAlertUsd: number,
+): void {
   app.get('/admin/usage', async (request, reply): Promise<AdminUsageResponse | undefined> => {
     if (!ownerUserId || request.userId !== ownerUserId) {
       return reply.code(404).send({ error: 'not found' });
@@ -53,6 +60,22 @@ export function registerAdminRoutes(app: FastifyInstance, ownerUserId: string | 
       }
     }
 
+    // Best-effort Credits balance: an unconfigured account or a Nosana outage
+    // must not break the spend summary (which is all from Postgres). Null tells
+    // the app to hide the balance card but still show spend (M6.3).
+    let credits: CreditsBalance | null = null;
+    try {
+      const b = await fetchCreditsBalance();
+      credits = {
+        assigned_usd: b.assignedUsd,
+        reserved_usd: b.reservedUsd,
+        settled_usd: b.settledUsd,
+        available_usd: b.availableUsd,
+      };
+    } catch (err) {
+      request.log.warn({ err }, 'admin/usage: Credits balance unavailable');
+    }
+
     return {
       jobs_total: rows.length,
       jobs_done: jobsDone,
@@ -60,6 +83,8 @@ export function registerAdminRoutes(app: FastifyInstance, ownerUserId: string | 
       cost_usd_total: costTotal,
       cost_usd_30d: cost30d,
       avg_duration_s: durationCount > 0 ? durationSum / durationCount : null,
+      credits,
+      credits_alert_usd: creditsAlertUsd,
     };
   });
 }

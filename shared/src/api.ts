@@ -48,8 +48,23 @@ export interface RegisterPushRequest {
   platform: PushPlatform;
 }
 
+/** Nosana Credits balance for the orchestrator's funded account (spec §8.3,
+ *  M6.3). All figures in USD. `available_usd` is what's left to spend now
+ *  (assigned − reserved − settled) — the figure the dashboard calls "Credit
+ *  balance". */
+export interface CreditsBalance {
+  /** Total Credits ever funded to the account. */
+  assigned_usd: number;
+  /** Held for in-flight (running/queued) jobs. */
+  reserved_usd: number;
+  /** Total spent/settled so far. */
+  settled_usd: number;
+  /** Spendable now = assigned − reserved − settled (the dashboard "Credit balance"). */
+  available_usd: number;
+}
+
 /** Response of `GET /admin/usage` — owner-only Nosana spend summary (spec §8.3,
- *  M6.2). Aggregated across all analysis jobs. */
+ *  M6.2/M6.3). Aggregated across all analysis jobs. */
 export interface AdminUsageResponse {
   jobs_total: number;
   jobs_done: number;
@@ -61,6 +76,11 @@ export interface AdminUsageResponse {
   cost_usd_30d: number;
   /** Mean wall-clock duration of completed jobs (s), or null if none finished. */
   avg_duration_s: number | null;
+  /** Live Credits balance, or null when Nosana is unconfigured or the balance
+   *  call failed — the DB-derived spend fields above are still returned (M6.3). */
+  credits: CreditsBalance | null;
+  /** Alert threshold (USD): `credits.available_usd` below this is "low" (M6.3). */
+  credits_alert_usd: number;
 }
 
 /** Response of `GET /reports/:id/artifacts` — short-lived signed R2 GET URLs for

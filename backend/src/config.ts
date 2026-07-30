@@ -15,6 +15,9 @@ export interface Config {
    *  owner-only cost summary at `GET /admin/usage` (spec §8.3, M6.2). Unset =
    *  the endpoint is off (404 for everyone). */
   ownerUserId: string | null;
+  /** Low-Credits alert threshold (USD): `GET /admin/usage` flags the balance as
+   *  "low" when available Credits fall below this. Default 5 (spec §13, M6.3). */
+  creditsAlertUsd: number;
 }
 
 const REQUIRED = [
@@ -41,6 +44,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     r2SecretAccessKey: env.R2_SECRET_ACCESS_KEY as string,
     r2Bucket: env.R2_BUCKET as string,
     ownerUserId: env.OWNER_USER_ID ?? null,
+    creditsAlertUsd: Number(env.NOSANA_CREDITS_ALERT_USD ?? 5),
   };
 }
 

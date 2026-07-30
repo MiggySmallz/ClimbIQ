@@ -123,7 +123,7 @@ climbiq/
 - **Report screen** — renders the report contract (§10): overlay clip player, issue cards (severity-colored, tap → seek video to evidence timestamp, drill text), biomechanics timeline synced two-way with the video scrubber (scrubbing the chart seeks the video and vice versa), score radar/bars + grade estimate, share button (visibility: private/friends). Shows "raw video available until <date>" so expiry is never a surprise.
 - **Climbs (journal)** — CRUD climb logs (name, gym/location, grade, style, sent/attempt, notes, date). A climb may link to ≥0 analyzed videos/reports.
 - **Stats / Progress** — classic journal stats (grade pyramid, sends over time) **plus** technique progress: per-issue trend lines from stored reports (e.g., "barn-door frames per climb, last 10 reports"). Data source: `reports` rows only (videos expire).
-- **Feed** — reversed-chron list of friends' shared reports (thumbnail, grade, top issue, score). Tap → read-only report view. Friend management: search username → request → accept.
+- **Feed** — reversed-chron list of friends' shared reports (grade, top issue, score). Realtime on `reports` (a friend sharing = an INSERT at `visibility='friends'` or a private→friends UPDATE; RLS scopes the stream). Tap → read-only report view (the report screen hides the owner-only sharing controls + retention notice when the viewer isn't the report owner). Friend management: search username → request → accept. **Deviation (M5.3, 2026-07-23):** the card shows a score/grade visual, **not a video thumbnail** — the analysis pipeline emits no poster frame, and a per-feed-item signed-URL + frame decode isn't worth it for v1. A real thumbnail would require the job to PUT a poster image (future).
 - **Profile** — avatar, stats summary, friends list, settings (notifications, account deletion).
 
 **Rules:** no business logic in screens (hooks/services layer); all backend types imported from `/shared`; every list screen handles empty/loading/error states; no dead placeholder buttons — if a feature isn't built, it isn't shown.
@@ -142,11 +142,12 @@ Endpoints (all JWT-authenticated):
 
 | Route | Purpose |
 |---|---|
-| `POST /videos` | Validate metadata (duration/size caps) → create `videos` row → return presigned R2 PUT URL |
+| `POST /videos` | Validate metadata (duration ≤90 s; size cap `MAX_UPLOAD_BYTES`, default **500 MB** — a generous bound on a ≤90 s ≤1080p clip) → create `videos` row → return presigned R2 PUT URL. No client filename is trusted: the R2 key is server-generated (`videos/{user_id}/{video_id}.mp4`), so path injection is impossible by construction (§3 sanitize) |
 | `POST /videos/:id/analyze` | Create `analysis_jobs` row (`queued`) → post Nosana job → store `nosana_job_id`, status `posted` |
-| `POST /jobs/:id/retry` | Re-post a failed job (max 2 retries, then `failed` + push notification) |
+| `POST /jobs/:id/retry` | User-initiated re-run of a **terminal-failed** job (`error`/`timeout`). Re-posts on the same `report_id`; resets `attempt` so the manual run gets a fresh automatic-retry budget (see §8.3). 409 if the job isn't failed or the raw video is gone; 503 if Nosana unconfigured |
 | `GET /reports/:id/artifacts` | Short-lived signed GET URLs for overlay clip + timeline JSON |
-| `POST /push/register` | Store Expo push token |
+| `POST /push/register` | Upsert the caller's Expo push token (idempotent on `(user_id, token)`) |
+| `GET /admin/usage` | **Owner-only** Nosana spend + job-outcome summary (M6.2) **plus the live Credits balance + low-balance threshold** (M6.3). Gated to a single configured `OWNER_USER_ID`; 404 for everyone else, and disabled entirely when that env is unset. The balance is best-effort — a Nosana outage or unfunded account returns `credits: null` and the DB-derived spend fields still return |
 
 Internal loops (simple `setInterval` workers inside the same service — no queue infra at this scale):
 - **Job poller:** every 30 s, poll Nosana for non-terminal jobs → on success: download result JSON from R2, validate against the report JSON Schema, insert `reports` row, mark job `done`, send push. On failure/timeout (>20 min): mark `error`, auto-retry up to 2×. Polling is deliberate: at this job volume it's negligible load and writes only on state change. If the Nosana API ships completion webhooks, adopt them — but keep this poller as the missed-delivery/timeout fallback; never go webhook-only.
@@ -162,7 +163,7 @@ One image, one op, one GPU rental per video:
 - **Base:** CUDA runtime image; Python 3.11. **No PyTorch, no SMPL/4D-Humans** — the whole pose side is ONNX.
 - **Baked into the image at build time** (never downloaded at job runtime — node cold-start with cached image should be seconds, not minutes): rtmlib ONNX models (YOLOX person detector + **RTMW wholebody**, 133 kpts; DWPose is the fallback if RTMW underperforms on climbing footage) with `onnxruntime-gpu`, and **Qwen3.6-27B** GGUF **Q4_K_M (~17 GB)** served by llama.cpp with its vision projector (vLLM ≥0.19 FP8 is the alternative if the market GPU has >24 GB). VRAM budget on a 24 GB 4090-class node: pose ONNX (~2 GB) + Qwen Q4 (~17 GB) + vision/KV overhead — fits, but cap evidence images (see pipeline below) and context to stay inside it.
 - **Entrypoint contract** — everything via env vars: `VIDEO_URL` (presigned GET, ≤1 h expiry), `RESULT_PUT_URL`, `OVERLAY_PUT_URL`, `TIMELINE_PUT_URL` (presigned PUTs), `JOB_PARAMS` (JSON: sample fps, video id, climber-declared grade if any).
-- **Pipeline inside the job:** download video → stream-decode sampled frames at ~3 fps (never buffer the whole video in RAM) → YOLOX person bbox per frame → track the largest/most-central person → RTMW on the bbox → temporal smoothing (One-Euro or 5-frame median on keypoints) → features from 2D keypoints (grip class via PIP/DIP finger angles, full-crimp risk via DIP hyperextension, foot contact class via heel–toe axis angle, elbow angles / bent-arm hangs, barn-door via lateral hip travel, hip-drop via hip height relative to a baseline = 90th-percentile hip height over the first 2 s of detected climbing, never frame 0; **all thresholds normalized to body scale in pixels** — e.g. torso length — never absolute units. **Owner decision 2026-07-13: hand/finger features are secondary** — 2D finger tracking on climbing footage is too unreliable to lead coaching, so grip/crimp features are gated behind a high keypoint-confidence bar, reported only when confident, and ranked below body-level features (hips, elbows, feet) in issue ranking and scoring) → scores + grade estimate (v1: transparent heuristic from issue counts/severities; label it "beta" in UI) → build `llm_context` **and extract per-issue evidence sequences** — for each top issue segment, 3–5 bbox-cropped frames spanning the segment, composed into one labeled strip/grid image per issue (motion *is* the evidence for dynamic faults like barn-dooring; an isolated still can't show it), plus 2–3 evenly spaced whole-climb context frames; hard-cap total images to stay inside the VRAM/token budget → **one Qwen3.6-27B call with the evidence images + llm_context** and a fixed coaching prompt (temperature ~0.4, max ~800 tokens): the model visually verifies each detected issue (it may downgrade a false positive — include a `verified: true/false` field per issue in its structured output), adds judgment 2D features can't measure (body-to-wall distance, dynamic vs static style), and writes `coaching_text` + per-issue `drill` strings → render overlay clip (skeleton on sampled frames → 720p H.264, ffmpeg) → PUT the three artifacts → exit 0. Any failure: PUT a structured error JSON to `RESULT_PUT_URL`, exit non-zero.
+- **Pipeline inside the job:** download video → stream-decode sampled frames at the configured sample rate (**owner decision 2026-07-22: default 30 fps**, set via `ANALYSIS_SAMPLE_FPS`/`JOB_PARAMS.sample_fps`; was ~3 fps — 30 gives smooth overlay playback and fine temporal resolution for dynamic moves at ~10x the pose GPU time/cost; still streamed, never buffer the whole video in RAM) → YOLOX person bbox per frame → track the largest/most-central person → RTMW on the bbox → temporal smoothing (One-Euro or 5-frame median on keypoints) → features from 2D keypoints (grip class via PIP/DIP finger angles, full-crimp risk via DIP hyperextension, foot contact class via heel–toe axis angle, elbow angles / bent-arm hangs, barn-door via lateral hip travel, hip-drop via hip height relative to a baseline = 90th-percentile hip height over the first 2 s of detected climbing, never frame 0; **all thresholds normalized to body scale in pixels** — e.g. torso length — never absolute units. **Owner decision 2026-07-13: hand/finger features are secondary** — 2D finger tracking on climbing footage is too unreliable to lead coaching, so grip/crimp features are gated behind a high keypoint-confidence bar, reported only when confident, and ranked below body-level features (hips, elbows, feet) in issue ranking and scoring) → scores + grade estimate (v1: transparent heuristic from issue counts/severities; label it "beta" in UI) → build `llm_context` **and extract per-issue evidence sequences** — for each top issue segment, 3–5 bbox-cropped frames spanning the segment, composed into one labeled strip/grid image per issue (motion *is* the evidence for dynamic faults like barn-dooring; an isolated still can't show it), plus 2–3 evenly spaced whole-climb context frames; hard-cap total images to stay inside the VRAM/token budget → **one Qwen3.6-27B call with the evidence images + llm_context** and a fixed coaching prompt (temperature ~0.4, max ~800 tokens; Qwen3.6 is hybrid-thinking, so thinking is **disabled** on this call via `enable_thinking:false` — otherwise it spends the whole token budget on `reasoning_content` and returns empty `content`; and its output arrives fenced in ```` ```json ```` despite `response_format: json_object`, so the fence is stripped before parsing): the model visually verifies each detected issue (it may downgrade a false positive — include a `verified: true/false` field per issue in its structured output), adds judgment 2D features can't measure (body-to-wall distance, dynamic vs static style), and writes `coaching_text` + per-issue `drill` strings → render overlay clip (skeleton on sampled frames → 720p H.264, ffmpeg) → PUT the three artifacts → exit 0. Any failure: PUT a structured error JSON to `RESULT_PUT_URL`, exit non-zero.
 - **Image size & cold pulls (accepted risk):** baked weights mean a ~20 GB image. A node that has never run it pays a multi-minute Docker pull once, and you don't choose the node — so first-contact jobs can miss the latency target. Mitigations: pin **one small market** so repeat jobs land on warm nodes; keep the image otherwise lean (single quant, no build tools); set expectations in-app ("first analyses can take longer"). Downloading weights at runtime is *not* a fix — same bytes, but no layer cache.
 - Target: ≤4 min end-to-end for a 60 s video on a **warm** 4090-class node (image cached); cold nodes add pull time. Pose is light; LLM load + one vision call dominates.
 
@@ -188,8 +189,10 @@ Orchestrator flow per analysis: pick/pin the GPU market (via `client.api.markets
 
 ### 8.3 Failure & cost handling
 - Job states: `queued → posted → running → done | error | timeout` (poller-driven).
-- Retries: 2, then user-visible failure push ("Analysis failed — tap to retry"). Refund-of-attention matters more than perfection at this scale.
-- Record `posted_at`/`finished_at` and (when the SDK exposes it) job price per run in `analysis_jobs` for cost tracking.
+- **Automatic retries:** the poller retries a failed/timed-out job up to 2× (bumping `attempt`, re-posting on the same `report_id`), then a user-visible failure push ("Analysis failed — tap to retry"). Refund-of-attention matters more than perfection at this scale.
+- **Manual retry** (`POST /jobs/:id/retry`, M3.9): a human tapping "try again" after the automatic budget is exhausted resets `attempt` to 1, so each explicit retry gets its own fresh set of automatic retries — the 2× cap governs the automatic loop, not the human. Re-checks the raw video still exists in R2 first (the retention sweep may have deleted it).
+- **Cost tracking (M6.2):** `analysis_jobs.cost_usd` stores the Nosana Credits cost, **accumulated across attempts** (each post charges Credits, so a retried job's value is the sum). Duration is derived from `posted_at`/`finished_at`. The owner-only `GET /admin/usage` aggregates job counts, total + last-30-day cost, and average completed-job duration.
+- **Credits balance alert (M6.3):** `GET /admin/usage` also returns the live Nosana Credits balance (`client.api.credits.balance()` — figures are in **USD dollars, not cents**: `assigned` = total funded, `reserved` = held for in-flight jobs, `settled` = total spent; **available = assigned − reserved − settled**, which is the figure the dashboard shows as "Credit balance") and the `NOSANA_CREDITS_ALERT_USD` threshold (default $5). **Delivery decision:** the alert surfaces in an **owner-only card on the mobile Profile tab** — the app already fetches `/admin/usage`, which 404s for non-owners, so the card appears only for the owner (no owner id is shipped to the client) and shows a prominent "Credits low" banner when available Credits fall below the threshold. A **push** version rides the same threshold once Expo push creds land (M3.10). No separate admin panel/login.
 
 ## 9. Database schema (Postgres / Supabase migrations)
 
@@ -243,11 +246,20 @@ create table analysis_jobs (
   nosana_market text,
   attempt int not null default 1,
   error text,
+  cost_usd numeric,                  -- Nosana Credits cost, accumulated across
+                                     -- attempts; null until first post (M6.2)
   posted_at timestamptz, finished_at timestamptz,
   created_at timestamptz not null default now()
 );
 create index on analysis_jobs (video_id);
 create index on analysis_jobs (status) where status in ('queued','posted','running');
+-- at most one active job per video: makes the double-post race un-representable.
+-- The route's SELECT-then-INSERT idempotency check is not atomic; two /analyze
+-- calls milliseconds apart both slipped through and posted two Nosana jobs
+-- (double Credits charge). The second insert now hits 23505 and the route
+-- returns the in-flight job instead. (M3.5 fix)
+create unique index analysis_jobs_one_active_per_video on analysis_jobs (video_id)
+  where status in ('queued','posted','running');
 
 create type report_visibility as enum ('private','friends');
 create table reports (
@@ -295,6 +307,8 @@ Notes: `observations`/`scores` stay JSONB (report shape will evolve; the JSON Sc
 
 **R2 layout:** `videos/{user_id}/{video_id}.mp4` (expiring) · `reports/{report_id}/overlay.mp4` · `reports/{report_id}/timeline.json` · `reports/{report_id}/result.json` (permanent).
 
+**R2 client config:** the S3 client uses **path-style** URLs (`forcePathStyle: true`). R2's TLS cert is a single-level `*.r2.cloudflarestorage.com` wildcard, so virtual-hosted-style URLs (`<bucket>.<account>.r2.cloudflarestorage.com`) fail the handshake on the mobile app's strict BoringSSL stack — the phone can't GET artifacts even though Nosana nodes PUT them fine over standard TLS. Path-style (`<endpoint>/<bucket>/<key>`) keeps the host at one label and works everywhere. (M5.5 fix.)
+
 ## 10. Report JSON contract (`/shared`)
 
 The analysis job produces `result.json`; orchestrator validates it (JSON Schema) before creating the report row. Shape:
@@ -316,7 +330,7 @@ The analysis job produces `result.json`; orchestrator validates it (JSON Schema)
   "grade_estimate": "V4",
   "coaching_text": "…",                  // LLM prose, ~150-250 words
   "llm_model": "qwen3.6-27b-q4_k_m",
-  "pipeline": {"pose_fps": 3.0, "frames_analyzed": 180, "duration_s": 61.2}
+  "pipeline": {"pose_fps": 30.0, "frames_analyzed": 1836, "duration_s": 61.2}
 }
 ```
 
@@ -370,8 +384,13 @@ Both shapes are defined as TS types (`shared/src/report.ts`) and JSON Schema (`s
 | R2 account id / access key / secret / bucket | orchestrator env only |
 | Nosana API key (`NOSANA_API_KEY`, primary) | orchestrator env only, **never** in the repo or job definitions |
 | Nosana wallet keypair (fallback only, if the API path has gaps) | orchestrator env only (file or base58 env) |
-| Nosana market address, job image tag | orchestrator env |
+| Nosana market address (`NOSANA_MARKET`), job image tag (`ANALYSIS_IMAGE`) | orchestrator env |
+| `NOSANA_NODE` (optional — pin jobs to one staked+running node inside `NOSANA_MARKET`, warm-node dev strategy §8.1; unset = normal market-wide assignment) | orchestrator env, optional |
+| `EXPO_PUBLIC_API_URL` (orchestrator base URL the app calls; loud-fail if missing once upload/report paths run) | mobile (public) |
 | Expo push credentials | orchestrator env |
+| `ANALYSIS_SAMPLE_FPS` (pose sample rate → `JOB_PARAMS.sample_fps`) | orchestrator env, optional — **defaults to 30** (§8.1) |
+| `OWNER_USER_ID` (unlocks `GET /admin/usage`, §7.2) | orchestrator env, optional — summary disabled when unset |
+| `NOSANA_CREDITS_ALERT_USD` (low-Credits alert threshold, §8.3 M6.3) | orchestrator env, optional — defaults to 5 |
 | LLM prompt template | versioned file in `/nosana/analysis-job` (it's product logic, not a secret) |
 
 Rules: `.env*` gitignored everywhere from the first commit; no hardcoded secret fallbacks anywhere in code — a missing required secret fails startup loudly instead of silently defaulting.
@@ -382,5 +401,5 @@ Rules: `.env*` gitignored everywhere from the first commit; no hardcoded secret 
 2. **VLM tuning** — evidence format (per-issue frame strips/grids vs short low-fps video clips: Qwen3.6 accepts native video input, but KV-cache/VRAM on a 24 GB node is the binding constraint), frames per issue (start 3–5), crop size, Q4_K_M vs FP8 (FP8 needs >24 GB with vision overhead — pick the market accordingly), and how much weight to give VLM `verified` downgrades vs raw feature detections. The report contract doesn't change while tuning.
 2b. **3D upgrade path (only if 2D + VLM proves insufficient)** — GVHMR (SIGGRAPH Asia 2024) is the standout: gravity-aware world-grounded motion, temporally smooth, fast (280 ms of model time per 45 s video on a 4090) — but its weights are **non-commercial**, and anything SMPL-based carries the SMPL research-only license. Acceptable while ClimbIQ is friends-only; blocks monetization without licensing (Meshcapade for SMPL). Decide only when a concrete feature demands true 3D.
 3. **Multiple climbers in frame** — v1 tracks the largest/most-central person. If friends film from a busy gym, may need tap-to-select the climber (post-v1).
-4. **iOS** — Expo makes it nearly free except Apple sign-in becomes required for App Store; revisit at M5.
+4. **iOS** — Expo makes it nearly free except Apple sign-in becomes required for App Store. **Decided (M5.6, 2026-07-29): NO Apple sign-in for v1.** ClimbIQ is friends-only and not shipping to the App Store, so the Apple-sign-in requirement (which only applies to App Store distribution alongside other social logins) doesn't bind. Google + email/password stay the auth set. Revisit if/when App Store distribution is on the table.
 5. **Custom model fine-tuning / annotation pipelines** — deliberately **out of scope** for v1. Pretrained RTMW + the Qwen3.6-27B vision pass is sufficient; revisit only if measured accuracy demands it.

@@ -23,6 +23,7 @@ const config: Config = {
   r2SecretAccessKey: 'secretexample',
   r2Bucket: 'climbiq',
   ownerUserId: null,
+  creditsAlertUsd: 5,
 };
 
 const client = createR2Client(config);
