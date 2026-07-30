@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
 import { useAuth } from '@/lib/auth-context';
+import { uniqueTopic } from '@/lib/realtime';
 import { supabase } from '@/lib/supabase';
 import * as reportsService from '@/services/reports';
 
@@ -28,7 +29,7 @@ export function useFeed() {
   useEffect(() => {
     if (!myId) return;
     const channel = supabase
-      .channel('feed-reports')
+      .channel(uniqueTopic('feed-reports'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, () => {
         void qc.invalidateQueries({ queryKey: FEED_KEY });
       })

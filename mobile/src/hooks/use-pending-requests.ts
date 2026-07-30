@@ -9,8 +9,13 @@ import { useEffect } from 'react';
 
 import { FRIENDSHIPS_KEY, splitFriendships, useFriendships } from '@/hooks/use-friends';
 import { useAuth } from '@/lib/auth-context';
+import { uniqueTopic } from '@/lib/realtime';
 import { supabase } from '@/lib/supabase';
 
+// This hook is mounted in two places at once — the Profile tab badge in
+// (tabs)/_layout and the Friends bubble on the Profile screen — so it needs a
+// unique channel topic per mount (see uniqueTopic) or the second subscriber's
+// `.on()` lands on an already-subscribed channel and throws.
 export function usePendingRequestCount(): number {
   const { session } = useAuth();
   const myId = session?.user.id;
@@ -20,7 +25,7 @@ export function usePendingRequestCount(): number {
   useEffect(() => {
     if (!myId) return;
     const channel = supabase
-      .channel('pending-friendships')
+      .channel(uniqueTopic('pending-friendships'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
         void qc.invalidateQueries({ queryKey: FRIENDSHIPS_KEY });
       })

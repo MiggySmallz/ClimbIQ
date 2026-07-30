@@ -26,5 +26,17 @@ export async function signInWithGoogle(): Promise<void> {
   if (!code) throw new Error('Google sign-in did not return an auth code.');
 
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-  if (exchangeError) throw exchangeError;
+  if (exchangeError) {
+    // The auth code is single-use. On Android the deep-link callback route
+    // (auth/callback) can navigate directly and exchange it first, winning the
+    // race and leaving this exchange with "Invalid flow state". That's not a
+    // failure — a session already exists. Poll briefly for it before surfacing
+    // the error, so a genuine failure (no session appears) still throws.
+    for (let i = 0; i < 5; i += 1) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) return;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    throw exchangeError;
+  }
 }

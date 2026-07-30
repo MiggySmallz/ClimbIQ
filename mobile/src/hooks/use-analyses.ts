@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
 import { useAuth } from '@/lib/auth-context';
+import { uniqueTopic } from '@/lib/realtime';
 import { supabase } from '@/lib/supabase';
 import * as analysesService from '@/services/analyses';
 
@@ -26,7 +27,7 @@ export function useAnalyses() {
   useEffect(() => {
     if (!myId) return;
     const channel = supabase
-      .channel('analyses-jobs')
+      .channel(uniqueTopic('analyses-jobs'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'analysis_jobs' }, () => {
         void qc.invalidateQueries({ queryKey: ANALYSES_KEY });
       })

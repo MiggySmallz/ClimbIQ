@@ -5,6 +5,7 @@
 import type { AnalysisJob } from '@climbiq/shared';
 import { useEffect, useState } from 'react';
 
+import { uniqueTopic } from '@/lib/realtime';
 import { supabase } from '@/lib/supabase';
 
 export interface JobStatusState {
@@ -31,7 +32,7 @@ export function useJobStatus(jobId: string): JobStatusState {
       });
 
     const channel = supabase
-      .channel(`job-${jobId}`)
+      .channel(uniqueTopic(`job-${jobId}`))
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'analysis_jobs', filter: `id=eq.${jobId}` },
