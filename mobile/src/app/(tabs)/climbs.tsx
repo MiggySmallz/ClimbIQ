@@ -4,9 +4,9 @@ import { router } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { useClimbs } from '@/hooks/use-climbs';
+import { useClimbReportIds, useClimbs } from '@/hooks/use-climbs';
 
-function ClimbRow({ climb }: { climb: Climb }) {
+function ClimbRow({ climb, reportId }: { climb: Climb; reportId?: string }) {
   return (
     <Pressable
       style={styles.row}
@@ -18,6 +18,16 @@ function ClimbRow({ climb }: { climb: Climb }) {
         <ThemedText themeColor="textSecondary" style={styles.rowMeta} numberOfLines={1}>
           {[climb.location, climb.style, climb.attempted_at].filter(Boolean).join(' · ')}
         </ThemedText>
+        {reportId ? (
+          <Pressable
+            style={styles.analyzedTag}
+            hitSlop={8}
+            onPress={() => router.push({ pathname: '/report/[id]', params: { id: reportId } })}>
+            <Ionicons name="sparkles" size={13} color="#208AEF" />
+            <Text style={styles.analyzedText}>View analysis</Text>
+            <Ionicons name="chevron-forward" size={13} color="#208AEF" />
+          </Pressable>
+        ) : null}
       </View>
       {climb.grade ? (
         <View style={[styles.gradeBadge, climb.sent ? styles.gradeSent : styles.gradeAttempt]}>
@@ -35,6 +45,7 @@ function ClimbRow({ climb }: { climb: Climb }) {
 
 export default function ClimbsScreen() {
   const { data, isPending, isError, refetch, isRefetching } = useClimbs();
+  const reportIds = useClimbReportIds();
 
   return (
     <View style={styles.container}>
@@ -60,7 +71,7 @@ export default function ClimbsScreen() {
           <FlatList
             data={data}
             keyExtractor={(c) => c.id}
-            renderItem={({ item }) => <ClimbRow climb={item} />}
+            renderItem={({ item }) => <ClimbRow climb={item} reportId={reportIds[item.id]} />}
             contentContainerStyle={styles.list}
             refreshing={isRefetching}
             onRefresh={() => refetch()}
@@ -89,6 +100,14 @@ const styles = StyleSheet.create({
   rowMain: { flex: 1, gap: 2 },
   rowName: { fontSize: 16, fontWeight: '600' },
   rowMeta: { fontSize: 13 },
+  analyzedTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 3,
+    marginTop: 6,
+  },
+  analyzedText: { color: '#208AEF', fontSize: 12, fontWeight: '600' },
   gradeBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   gradeSent: { backgroundColor: '#30A46C' },
   gradeAttempt: { backgroundColor: '#8B8D98' },

@@ -1,16 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { MAX_RECORD_SECONDS } from '@/services/video';
 
 export default function RecordScreen() {
-  const [cameraPermission, requestCamera] = useCameraPermissions();
-  const [micPermission, requestMic] = useMicrophonePermissions();
+  const [cameraPermission, requestCamera, getCamera] = useCameraPermissions();
+  const [micPermission, requestMic, getMic] = useMicrophonePermissions();
   const cameraRef = useRef<CameraView | null>(null);
   const startRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -18,6 +18,36 @@ export default function RecordScreen() {
   const [elapsed, setElapsed] = useState(0);
 
   const granted = cameraPermission?.granted && micPermission?.granted;
+
+  // Once either permission has been denied, Android/iOS won't show the system
+  // dialog again — requestCamera()/requestMic() resolve instantly with no prompt
+  // (the "nothing happens on Grant access" bug). In that case send the user to
+  // the OS settings screen instead. `canAskAgain` false ⇒ prompt is exhausted.
+  const mustOpenSettings =
+    (cameraPermission != null && !cameraPermission.granted && !cameraPermission.canAskAgain) ||
+    (micPermission != null && !micPermission.granted && !micPermission.canAskAgain);
+
+  async function requestAccess() {
+    if (mustOpenSettings) {
+      await Linking.openSettings();
+      return;
+    }
+    if (!cameraPermission?.granted) await requestCamera();
+    if (!micPermission?.granted) await requestMic();
+  }
+
+  // When the user flips the toggle in OS Settings and returns to the app, re-read
+  // both permissions so the screen advances to the camera automatically — no
+  // second "Grant access" tap needed (M3.18).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        void getCamera();
+        void getMic();
+      }
+    });
+    return () => sub.remove();
+  }, [getCamera, getMic]);
 
   function stopTimer() {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -68,15 +98,14 @@ export default function RecordScreen() {
         <Ionicons name="camera-outline" size={44} color="#fff" />
         <ThemedText style={styles.permissionTitle}>Camera access needed</ThemedText>
         <Text style={styles.permissionHint}>
-          ClimbIQ needs your camera and microphone to film your climbs.
+          {mustOpenSettings
+            ? 'Open Settings ▸ Permissions and turn on Camera and Microphone for ClimbIQ, then come back — the camera opens automatically.'
+            : 'ClimbIQ needs your camera and microphone to film your climbs.'}
         </Text>
-        <Pressable
-          style={styles.permissionButton}
-          onPress={async () => {
-            if (!cameraPermission.granted) await requestCamera();
-            if (!micPermission.granted) await requestMic();
-          }}>
-          <Text style={styles.permissionButtonText}>Grant access</Text>
+        <Pressable style={styles.permissionButton} onPress={requestAccess}>
+          <Text style={styles.permissionButtonText}>
+            {mustOpenSettings ? 'Open Settings' : 'Grant access'}
+          </Text>
         </Pressable>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Text style={styles.cancelText}>Not now</Text>

@@ -3,8 +3,15 @@ import { useMemo, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, View } from 'react-native';
 
 const STRIP_HEIGHT = 64;
-const HANDLE_WIDTH = 16;
+const HANDLE_WIDTH = 22;
 const MIN_GAP_MS = 500;
+// Side gutters keep both handles clear of the OS edge-swipe-back gesture zone,
+// which otherwise steals the drag when a handle sits at full-range against the
+// screen edge. The strip is inset by the same gutter.
+const GUTTER = 32;
+// Enlarge each handle's touch target well past its 22px visual width so it's
+// easy to grab (the whole strip is no longer draggable — the handles are).
+const HANDLE_HITSLOP = { top: 12, bottom: 12, left: 18, right: 18 };
 
 interface Props {
   thumbnails: string[];
@@ -15,53 +22,62 @@ interface Props {
 }
 
 /**
- * Two-handle trim range over a thumbnail strip (spec §6, M3.14). Pre-filled to
- * the full range by the parent; dragging either handle reports the new range.
+ * Two-handle trim range over a thumbnail strip (spec §6, M3.14). Each handle has
+ * its own PanResponder and drags by gesture delta (`dx`), which is robust to
+ * which child element the finger lands on — the shared-track "grab nearest
+ * handle" approach didn't register drags on device (M3.19).
  */
 export function TrimRange({ thumbnails, durationMs, startMs, endMs, onChange }: Props) {
   const [width, setWidth] = useState(0);
-  const activeHandle = useRef<'start' | 'end'>('start');
-  const trackW = Math.max(width, 1);
+  const trackW = Math.max(width - 2 * GUTTER, 1);
+  const msToX = (ms: number) => GUTTER + (ms / durationMs) * trackW;
 
-  const msToX = (ms: number) => (ms / durationMs) * trackW;
-  const xToMs = (x: number) => Math.max(0, Math.min(durationMs, (x / trackW) * durationMs));
+  // The ms value of the handle being dragged, captured on grant so the move
+  // handler can apply a gesture delta (`dx`). Only read/written inside the
+  // gesture callbacks (native touches), never during render.
+  const grabbed = useRef(0);
 
-  const panHandlers = useMemo(() => {
-    const apply = (x: number) => {
-      const ms = xToMs(x);
-      if (activeHandle.current === 'start') {
-        onChange(Math.min(ms, endMs - MIN_GAP_MS), endMs);
-      } else {
-        onChange(startMs, Math.max(ms, startMs + MIN_GAP_MS));
-      }
-    };
-    // activeHandle.current is only read/written inside these gesture callbacks
-    // (fired by native touches), never during render.
-    // eslint-disable-next-line react-hooks/refs
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        const x = e.nativeEvent.locationX;
-        // Grab whichever handle is nearer the touch.
-        activeHandle.current =
-          Math.abs(x - msToX(startMs)) <= Math.abs(x - msToX(endMs)) ? 'start' : 'end';
-        apply(x);
-      },
-      onPanResponderMove: (e) => apply(e.nativeEvent.locationX),
-    });
-    // trackW/durationMs/range bounds change what a touch maps to.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackW, durationMs, startMs, endMs, onChange]);
+  const startPan = useMemo(
+    () =>
+      // eslint-disable-next-line react-hooks/refs
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          grabbed.current = startMs;
+        },
+        onPanResponderMove: (_e, g) => {
+          const deltaMs = (g.dx / trackW) * durationMs;
+          const next = Math.max(0, Math.min(grabbed.current + deltaMs, endMs - MIN_GAP_MS));
+          onChange(next, endMs);
+        },
+      }),
+    [trackW, durationMs, startMs, endMs, onChange],
+  );
+
+  const endPan = useMemo(
+    () =>
+      // eslint-disable-next-line react-hooks/refs
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          grabbed.current = endMs;
+        },
+        onPanResponderMove: (_e, g) => {
+          const deltaMs = (g.dx / trackW) * durationMs;
+          const next = Math.min(durationMs, Math.max(grabbed.current + deltaMs, startMs + MIN_GAP_MS));
+          onChange(startMs, next);
+        },
+      }),
+    [trackW, durationMs, startMs, endMs, onChange],
+  );
 
   const startX = msToX(startMs);
   const endX = msToX(endMs);
 
   return (
-    <View
-      style={styles.container}
-      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-      {...panHandlers}>
+    <View style={styles.container} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <View style={styles.strip}>
         {thumbnails.map((uri, i) => (
           <Image key={i} source={{ uri }} style={styles.thumb} contentFit="cover" />
@@ -70,9 +86,12 @@ export function TrimRange({ thumbnails, durationMs, startMs, endMs, onChange }: 
 
       {width > 0 && (
         <>
-          {/* dimmed regions outside the selection */}
-          <View style={[styles.dim, { left: 0, width: startX }]} pointerEvents="none" />
-          <View style={[styles.dim, { left: endX, right: 0 }]} pointerEvents="none" />
+          {/* dimmed regions outside the selection (within the inset strip) */}
+          <View
+            style={[styles.dim, { left: GUTTER, width: startX - GUTTER }]}
+            pointerEvents="none"
+          />
+          <View style={[styles.dim, { left: endX, right: GUTTER }]} pointerEvents="none" />
 
           {/* selection border */}
           <View
@@ -80,11 +99,17 @@ export function TrimRange({ thumbnails, durationMs, startMs, endMs, onChange }: 
             pointerEvents="none"
           />
 
-          {/* handles */}
-          <View style={[styles.handle, { left: startX - HANDLE_WIDTH }]} pointerEvents="none">
+          {/* draggable handles */}
+          <View
+            style={[styles.handle, { left: startX - HANDLE_WIDTH }]}
+            hitSlop={HANDLE_HITSLOP}
+            {...startPan.panHandlers}>
             <View style={styles.grip} />
           </View>
-          <View style={[styles.handle, { left: endX }]} pointerEvents="none">
+          <View
+            style={[styles.handle, { left: endX }]}
+            hitSlop={HANDLE_HITSLOP}
+            {...endPan.panHandlers}>
             <View style={styles.grip} />
           </View>
         </>
@@ -98,6 +123,7 @@ const styles = StyleSheet.create({
   strip: {
     flexDirection: 'row',
     height: STRIP_HEIGHT,
+    marginHorizontal: GUTTER,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#00000020',
@@ -124,6 +150,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: HANDLE_WIDTH,
     backgroundColor: '#208AEF',
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -95,15 +95,15 @@ async function handleJob(
         .from('analysis_jobs')
         .update({ status: 'done', finished_at: new Date().toISOString() })
         .eq('id', job.id);
-      await notifyJobDone(app, job);
+      await notifyJobDone(app, job, job.videos.user_id);
     } else {
-      await failJob(app, poster, job, 'bad_output', sampleFps);
+      await failJob(app, poster, job, 'bad_output', sampleFps, job.videos.user_id);
     }
     return;
   }
 
   if (state === 'stopped') {
-    await failJob(app, poster, job, 'stopped', sampleFps);
+    await failJob(app, poster, job, 'stopped', sampleFps, job.videos.user_id);
     return;
   }
 
@@ -112,7 +112,7 @@ async function handleJob(
     await app.supabase.from('analysis_jobs').update({ status: 'running' }).eq('id', job.id);
   }
   if (job.posted_at && Date.now() - Date.parse(job.posted_at) > budgetMs) {
-    await failJob(app, poster, job, 'timeout', sampleFps);
+    await failJob(app, poster, job, 'timeout', sampleFps, job.videos.user_id);
   }
 }
 
@@ -122,6 +122,7 @@ async function failJob(
   job: PollJob,
   reason: FailReason,
   sampleFps: number,
+  recipientUserId: string,
 ): Promise<void> {
   // Retry: bump attempt, clear the old Nosana id, re-post the SAME report_id
   // (same R2 key prefix) so the artifacts land where the report will point.
@@ -144,7 +145,7 @@ async function failJob(
         .from('analysis_jobs')
         .update({ status: 'error', error: 'retry_post_failed', finished_at: new Date().toISOString() })
         .eq('id', job.id);
-      await notifyJobFailed(app, job);
+      await notifyJobFailed(app, job, recipientUserId);
     }
     return;
   }
@@ -158,5 +159,5 @@ async function failJob(
       finished_at: new Date().toISOString(),
     })
     .eq('id', job.id);
-  await notifyJobFailed(app, job);
+  await notifyJobFailed(app, job, recipientUserId);
 }

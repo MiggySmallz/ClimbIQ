@@ -48,6 +48,13 @@ export interface RegisterPushRequest {
   platform: PushPlatform;
 }
 
+/** `data` payload carried by an analysis push (spec §7.2, M3.10/M3.17). The app
+ *  reads `type` on notification tap to deep-link (report when done, the status/
+ *  retry screen on failure). */
+export type PushData =
+  | { type: 'report'; reportId: string }
+  | { type: 'retry'; jobId: string };
+
 /** Nosana Credits balance for the orchestrator's funded account (spec §8.3,
  *  M6.3). All figures in USD. `available_usd` is what's left to spend now
  *  (assigned − reserved − settled) — the figure the dashboard calls "Credit

@@ -56,3 +56,13 @@ test-videos/
 
 # Claude Code local state
 .claude/
+
+
+google-services.json
+# Firebase / FCM service-account private keys — secrets, never commit
+*-firebase-adminsdk-*.json
+*service-account*.json
+/ios
+/android
+
+todo.md

@@ -141,6 +141,25 @@ export async function listReportTrends(userId: string, limit = 10): Promise<Tren
   return (data as unknown as TrendReport[]).slice().reverse();
 }
 
+/** Maps each journal climb that has an analysis to its most-recent report id, for
+ *  the tappable "Analyzed" marker on the climbs list (spec §5/§11.6, M4.10).
+ *  Reports are retention-capped so the row count is small; newest-first order
+ *  means the first row seen per climb is the latest. */
+export async function listClimbReportIds(userId: string): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from('reports')
+    .select('id, climb_id')
+    .eq('user_id', userId)
+    .not('climb_id', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  const byClimb: Record<string, string> = {};
+  for (const row of data as { id: string; climb_id: string }[]) {
+    if (!byClimb[row.climb_id]) byClimb[row.climb_id] = row.id;
+  }
+  return byClimb;
+}
+
 export async function setReportVisibility(
   id: string,
   visibility: ReportVisibility,

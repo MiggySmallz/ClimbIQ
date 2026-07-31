@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 
 SplashScreen.preventAutoHideAsync();
@@ -12,6 +13,7 @@ const queryClient = new QueryClient();
 
 function RootNavigator() {
   const { session } = useAuth();
+  usePushNotifications();
 
   useEffect(() => {
     // session === undefined means the initial auth load is still in flight.

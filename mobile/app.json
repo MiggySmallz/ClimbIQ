@@ -11,6 +11,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -66,7 +67,8 @@
       "expo-image",
       "expo-status-bar",
       "expo-web-browser",
-      "expo-video"
+      "expo-video",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
