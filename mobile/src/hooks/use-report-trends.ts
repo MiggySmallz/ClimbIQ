@@ -1,7 +1,3 @@
-// The signed-in user's technique-progress data (spec §6, M5.4). Initial fetch of
-// recent reports via TanStack Query, kept fresh by a realtime subscription so a
-// newly-finished analysis extends the trend lines without a manual refresh.
-
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
@@ -12,14 +8,14 @@ import * as reportsService from '@/services/reports';
 
 const TRENDS_KEY = ['report-trends'];
 
-export function useReportTrends() {
+export function useReportTrends(limit = 10) {
   const { session } = useAuth();
   const qc = useQueryClient();
   const myId = session?.user.id;
 
   const query = useQuery({
-    queryKey: [...TRENDS_KEY, myId],
-    queryFn: () => reportsService.listReportTrends(myId!),
+    queryKey: [...TRENDS_KEY, myId, limit],
+    queryFn: () => reportsService.listReportTrends(myId!, limit),
     enabled: !!myId,
   });
 

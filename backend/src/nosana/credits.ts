@@ -1,8 +1,7 @@
-// Nosana Credits balance lookup (spec §8.3, M6.3). Read-only query against the
-// funded account behind NOSANA_API_KEY so the owner can see remaining Credits
-// and get a low-balance alert in the app. Kept out of postAnalysisJob.ts because
-// it's a query, not the payment path — but it shares the same API-key client
-// construction, the one place auth mode lives (§8.2).
+// Nosana Credits balance lookup — a read-only query against the funded account
+// behind NOSANA_API_KEY so the owner can see remaining Credits and get a
+// low-balance alert. Separate from postAnalysisJob.ts (a query, not the payment
+// path), though it shares the same API-key client construction.
 
 import { createNosanaClient, NosanaNetwork } from '@nosana/kit';
 
@@ -15,8 +14,8 @@ export interface CreditsBalanceUsd {
   reservedUsd: number;
   /** Total spent/settled so far (USD). */
   settledUsd: number;
-  /** Spendable now = assigned − reserved − settled (USD) — this is the figure the
-   *  Nosana dashboard shows as "Credit balance". */
+  /** Spendable now = assigned − reserved − settled (USD) — the dashboard's
+   *  "Credit balance". */
   availableUsd: number;
 }
 
@@ -30,11 +29,8 @@ export async function fetchCreditsBalance(): Promise<CreditsBalanceUsd> {
   const client = createNosanaClient(NosanaNetwork.MAINNET, { api: { apiKey: config.apiKey } });
 
   // Figures come back in USD DOLLARS (not cents — do NOT divide by 100).
-  // `assignedCredits` = total ever funded, `reservedCredits` = held for in-flight
-  // jobs, `settledCredits` = total spent. Spendable now = assigned − reserved −
-  // settled, which is exactly what the dashboard labels "Credit balance".
-  // Verified against a live account: 2.701 − 0.70 − 0.355 = 1.646 ≈ $1.65 balance
-  // with $0.70 reserved — matching the dashboard.
+  // Spendable now = assigned − reserved − settled, which is exactly what the
+  // dashboard labels "Credit balance".
   const b = await client.api.credits.balance();
   const assignedUsd = b.assignedCredits;
   const reservedUsd = b.reservedCredits;

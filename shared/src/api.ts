@@ -1,24 +1,21 @@
-// Orchestrator HTTP contract (spec §7.2). Request/response shapes shared between
-// the Fastify routes (/backend) and the mobile client (/mobile) so the two halves
-// can't drift (spec §3). Route table lives in spec §7.2.
+// Orchestrator HTTP contract. Request/response shapes shared between the Fastify
+// routes and the mobile client so the two halves can't drift.
 
 import type { JobStatus } from './db.js';
 
-/** Hard limits enforced on both sides (spec §6 clip rules, §8.2 size cap). */
+/** Hard limits enforced on both sides. */
 export const MAX_CLIP_SECONDS = 90;
-/** Upload byte cap — not a spec-mandated figure; a generous bound on a ≤90 s
- *  ≤1080p H.264 clip so a leaked/abused presigned PUT can't store an arbitrarily
- *  large object. Raw videos expire in 30 days regardless (§11.8). */
+/** Upload byte cap — a generous bound on a ≤90 s ≤1080p H.264 clip so a leaked
+ *  presigned PUT can't store an arbitrarily large object. */
 export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 
 /** Body of `POST /videos` — metadata for a trimmed+compressed local clip. The
- *  server owns the R2 key (videos/{user_id}/{video_id}.mp4), so no client
- *  filename is accepted or trusted (§3 sanitize uploads). */
+ *  server owns the R2 key, so no client filename is accepted or trusted. */
 export interface CreateVideoRequest {
   /** Trimmed clip duration in seconds (≤ MAX_CLIP_SECONDS). */
   duration_s: number;
-  /** Exact byte size of the file to be uploaded; signed into the presigned PUT
-   *  as Content-Length so the URL can't upload a larger object (§8.2). */
+  /** Exact byte size to upload; signed into the presigned PUT as Content-Length
+   *  so the URL can't upload a larger object. */
   size_bytes: number;
   width?: number;
   height?: number;
@@ -38,7 +35,7 @@ export interface AnalyzeVideoResponse {
   status: JobStatus;
 }
 
-/** Platforms we register Expo push tokens for (spec §7.2, M3.9/M3.17). */
+/** Platforms we register Expo push tokens for. */
 export type PushPlatform = 'ios' | 'android';
 
 /** Body of `POST /push/register` — an Expo push token for the current device. */
@@ -48,17 +45,15 @@ export interface RegisterPushRequest {
   platform: PushPlatform;
 }
 
-/** `data` payload carried by an analysis push (spec §7.2, M3.10/M3.17). The app
- *  reads `type` on notification tap to deep-link (report when done, the status/
- *  retry screen on failure). */
+/** `data` payload carried by an analysis push. The app reads `type` on
+ *  notification tap to deep-link (report when done, retry screen on failure). */
 export type PushData =
   | { type: 'report'; reportId: string }
   | { type: 'retry'; jobId: string };
 
-/** Nosana Credits balance for the orchestrator's funded account (spec §8.3,
- *  M6.3). All figures in USD. `available_usd` is what's left to spend now
- *  (assigned − reserved − settled) — the figure the dashboard calls "Credit
- *  balance". */
+/** Nosana Credits balance for the orchestrator's funded account. All figures in
+ *  USD; `available_usd` is what's left to spend now (assigned − reserved −
+ *  settled) — the dashboard's "Credit balance". */
 export interface CreditsBalance {
   /** Total Credits ever funded to the account. */
   assigned_usd: number;
@@ -70,8 +65,21 @@ export interface CreditsBalance {
   available_usd: number;
 }
 
-/** Response of `GET /admin/usage` — owner-only Nosana spend summary (spec §8.3,
- *  M6.2/M6.3). Aggregated across all analysis jobs. */
+/** An analysis job currently in flight on Nosana (posted or running), surfaced in
+ *  the owner usage view so its run can be opened on the Nosana explorer. */
+export interface AdminActiveJob {
+  /** analysis_jobs.id (internal). */
+  id: string;
+  /** Nosana job id — link target: https://explore.nosana.com/jobs/{nosana_job_id}. */
+  nosana_job_id: string;
+  /** 'posted' | 'running'. */
+  status: string;
+  /** When the job was posted to Nosana, if known. */
+  posted_at: string | null;
+}
+
+/** Response of `GET /admin/usage` — owner-only Nosana spend summary, aggregated
+ *  across all analysis jobs. */
 export interface AdminUsageResponse {
   jobs_total: number;
   jobs_done: number;
@@ -84,15 +92,24 @@ export interface AdminUsageResponse {
   /** Mean wall-clock duration of completed jobs (s), or null if none finished. */
   avg_duration_s: number | null;
   /** Live Credits balance, or null when Nosana is unconfigured or the balance
-   *  call failed — the DB-derived spend fields above are still returned (M6.3). */
+   *  call failed — the DB-derived spend fields above are still returned. */
   credits: CreditsBalance | null;
-  /** Alert threshold (USD): `credits.available_usd` below this is "low" (M6.3). */
+  /** Alert threshold (USD): `credits.available_usd` below this is "low". */
   credits_alert_usd: number;
+  /** Jobs currently in flight on Nosana (posted/running), newest first, so their
+   *  runs can be opened on the Nosana explorer. */
+  active_jobs: AdminActiveJob[];
+}
+
+/** Response of `GET /admin/whoami` — a lightweight owner-identity probe that
+ *  touches no DB rows or Nosana, so the app can gate admin-only UI on it at login
+ *  without conflating "not the owner" with a transient data-fetch error. */
+export interface AdminWhoamiResponse {
+  admin: boolean;
 }
 
 /** Response of `GET /reports/:id/artifacts` — short-lived signed R2 GET URLs for
- *  the overlay clip + timeline JSON (§7.2, M4.1). Null when the artifact key is
- *  absent (e.g. a report predating an artifact). */
+ *  the overlay clip + timeline JSON. Null when the artifact key is absent. */
 export interface ReportArtifactsResponse {
   overlay_url: string | null;
   timeline_url: string | null;

@@ -1,20 +1,20 @@
-// Validate a finished job's result.json and insert the reports row (spec §7.2,
-// §10, M3.7). The heavy per-frame data (overlay clip, timeline) stays in R2; the
-// row carries the report contract's JSON fields + the artifact keys.
+// Validate a finished job's result.json and insert the reports row. The heavy
+// per-frame data (overlay clip, timeline) stays in R2; the row carries the report
+// contract's JSON fields + the artifact keys.
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 import type { AnalysisReport } from '@climbiq/shared';
-// Named import of the class (ajv also `export default`s it, but under NodeNext
-// CJS interop the default resolves to the namespace — the named export is clean).
+// Named import: under NodeNext CJS interop ajv's default resolves to the
+// namespace, so the named export is the clean one.
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { FastifyInstance } from 'fastify';
 
 import { getObjectText, reportOverlayKey, reportResultKey, reportTimelineKey } from '../r2/client.js';
 
-// The JSON Schema is the single source of truth (spec §10); read it from the
-// shared package at load time rather than duplicating it here.
+// The JSON Schema is the single source of truth; read it from the shared package
+// at load time rather than duplicating it here.
 const require = createRequire(import.meta.url);
 const reportSchema = JSON.parse(
   readFileSync(require.resolve('@climbiq/shared/src/report.schema.json'), 'utf8'),

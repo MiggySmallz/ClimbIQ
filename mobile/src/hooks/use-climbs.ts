@@ -15,10 +15,6 @@ export function useClimbs() {
   return useQuery({ queryKey: CLIMBS_KEY, queryFn: climbsService.listClimbs });
 }
 
-/** Maps each analyzed climb id → its latest report id, for the tappable
- *  "Analyzed" marker on the climbs list (M4.10). Kept fresh by a realtime
- *  subscription so a newly-finished (or newly linked/unlinked) analysis updates
- *  the marker without a manual refresh. */
 export function useClimbReportIds(): Record<string, string> {
   const { session } = useAuth();
   const qc = useQueryClient();

@@ -1,8 +1,7 @@
-// On-device video capture + processing for the analyze flow (spec §6, M3.13/M3.14).
-// All the imperative device/library work lives here so the screens stay
-// presentational. Trim + compress + frame extraction are one native module
-// (react-native-video-trim, headless APIs — no forced editor UI), which uses
-// native hardware re-encoding rather than the retired ffmpeg-kit.
+// On-device video capture + processing for the analyze flow. All the imperative
+// device/library work lives here so the screens stay presentational. Trim +
+// compress + frame extraction are one native module (react-native-video-trim),
+// which uses native hardware re-encoding rather than the retired ffmpeg-kit.
 
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,16 +27,14 @@ function loadVideoTrim(): Promise<VideoTrimModule> {
   return videoTrimModule;
 }
 
-/** Trimmed clips must be ≤90 s (spec §6). */
+/** Trimmed clips must be ≤90 s. */
 export const MAX_CLIP_SECONDS = 90;
-/** Source must be ≥720p on its short side (spec §6). */
+/** Source must be ≥720p on its short side. */
 export const MIN_SHORT_SIDE = 720;
-/** Output is capped to ≤1080p on the short side, never upscaled (spec §6). */
+/** Output is capped to ≤1080p on the short side, never upscaled. */
 export const MAX_OUTPUT_SHORT_SIDE = 1080;
-/** Recording is limited to the max clip length up front (spec §6). */
+/** Recording is limited to the max clip length up front. */
 export const MAX_RECORD_SECONDS = MAX_CLIP_SECONDS;
-
-const THUMBNAIL_COUNT = 10;
 
 export type VideoOrigin = 'record' | 'import';
 
@@ -65,7 +62,7 @@ function ensureFileUri(path: string): string {
   return /^[a-z]+:\/\//i.test(path) ? path : `file://${path}`;
 }
 
-/** Import a video from the library (spec §6 — the non-camera path). */
+/** Import a video from the library (the non-camera path). */
 export async function pickVideoFromLibrary(): Promise<VideoSource | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['videos'],
@@ -116,31 +113,13 @@ export async function probeDuration(uri: string): Promise<number> {
   }
 }
 
-/** Evenly spaced thumbnail frames across the clip, for the trim strip. */
-export async function extractThumbnails(uri: string, durationMs: number): Promise<string[]> {
-  const { getFrameAt } = await loadVideoTrim();
-  const frames: string[] = [];
-  for (let i = 0; i < THUMBNAIL_COUNT; i++) {
-    const time = Math.floor((durationMs * i) / THUMBNAIL_COUNT);
-    const { outputPath } = await getFrameAt(uri, {
-      time,
-      format: 'jpeg',
-      quality: 60,
-      maxWidth: 160,
-      maxHeight: -1,
-    });
-    frames.push(ensureFileUri(outputPath));
-  }
-  return frames;
-}
-
 function shortSide(width: number | null, height: number | null): number | null {
   return width && height ? Math.min(width, height) : null;
 }
 
 /**
- * Validate a selected range before processing (spec §6). Dimension checks are
- * skipped when dimensions are unknown — `processClip` probes and re-checks.
+ * Validate a selected range before processing. Dimension checks are skipped when
+ * dimensions are unknown — `processClip` probes and re-checks.
  */
 export function preCheck(source: VideoSource, startMs: number, endMs: number): PreCheckResult {
   const durationS = (endMs - startMs) / 1000;
@@ -159,9 +138,8 @@ export function preCheck(source: VideoSource, startMs: number, endMs: number): P
 }
 
 /**
- * Trim to the selected range, then compress to ≤1080p H.264 (spec §6). Probes
- * dimensions first so it can enforce ≥720p and cap the output short side without
- * upscaling.
+ * Trim to the selected range, then compress to ≤1080p H.264. Probes dimensions
+ * first so it can enforce ≥720p and cap the output short side without upscaling.
  */
 export async function processClip(
   source: VideoSource,

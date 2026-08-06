@@ -1,8 +1,8 @@
-# Evidence image extraction (spec §8.1): for each top issue, 3–5 bbox-cropped
-# frames spanning its segments composed into ONE labeled strip — motion *is*
-# the evidence for dynamic faults; an isolated still can't show a barn-door.
-# Plus 2–3 evenly spaced whole-climb context frames. Total images are
-# hard-capped to protect the VRAM/token budget (spec §8.1).
+# Evidence image extraction: for each top issue, 3–5 bbox-cropped frames spanning
+# its segments composed into ONE labeled strip — motion *is* the evidence for
+# dynamic faults; an isolated still can't show a barn-door. Plus 2–3 evenly
+# spaced whole-climb context frames. Total images are hard-capped to protect the
+# VRAM/token budget.
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,8 +14,8 @@ from rules import Issue
 from video_decode import sample_frames
 
 MAX_ISSUE_STRIPS = 3      # top issues that get an evidence strip
-FRAMES_PER_STRIP = 4      # spec: 3–5
-CONTEXT_FRAMES = 2        # spec: 2–3 whole-climb frames
+FRAMES_PER_STRIP = 4
+CONTEXT_FRAMES = 2        # whole-climb frames
 # → hard cap: 3 strips + 2 context = 5 images per job
 
 TILE_HEIGHT = 360         # px per cropped tile in a strip

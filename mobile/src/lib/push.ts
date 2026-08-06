@@ -1,7 +1,7 @@
-// Expo push registration (spec §7.2, M3.17). Acquires this device's Expo push
-// token and registers it with the orchestrator (POST /push/register, M3.9) so
-// the poller can notify on job done/failure (M3.10). Best-effort throughout — a
-// denied permission or missing token is never an error the user needs to see.
+// Expo push registration. Acquires this device's Expo push token and registers
+// it with the orchestrator so the poller can notify on job done/failure.
+// Best-effort throughout — a denied permission or missing token is never an
+// error the user needs to see.
 
 import type { PushPlatform } from '@climbiq/shared';
 import Constants from 'expo-constants';
@@ -11,8 +11,8 @@ import { Platform } from 'react-native';
 
 import { apiVoid } from '@/lib/api';
 
-// Foreground notifications should still surface a banner + sound (spec §7.2).
-// Set once at module load so it's active before any notification arrives.
+// Foreground notifications should still surface a banner + sound. Set once at
+// module load so it's active before any notification arrives.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,

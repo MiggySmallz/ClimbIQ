@@ -1,11 +1,10 @@
-// Stable observation-key vocabulary (spec §10, §8.1). Additive-only: adding a
-// key is safe, renaming or removing one breaks progress-over-time tracking
-// and every report that already references it.
+// Stable observation-key vocabulary. Additive-only: adding a key is safe,
+// renaming or removing one breaks progress-over-time tracking and every report
+// that already references it.
 
 /**
- * Issue keys — rule-detected problems (spec §8.1 feature list). Each is
- * documented with the rule that flags it; the rule decides *what* was
- * detected, the LLM only verifies/enriches (spec §3).
+ * Issue keys — rule-detected problems. Each is documented with the rule that
+ * flags it; the rule decides *what* was detected, the LLM only verifies/enriches.
  */
 export const ISSUE_KEYS = [
   // Lateral hip travel exceeds a body-scale-normalized threshold during a move.

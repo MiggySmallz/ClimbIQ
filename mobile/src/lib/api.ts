@@ -1,13 +1,12 @@
-// Orchestrator HTTP client (spec §7.2). The only path to the backend that isn't
-// Supabase-direct: presigned-URL issuance, analysis triggering, push registration.
-// Every request carries the current Supabase JWT so the orchestrator's auth
-// middleware can identify the user.
+// Orchestrator HTTP client — the only path to the backend that isn't
+// Supabase-direct. Every request carries the current Supabase JWT so the
+// orchestrator's auth middleware can identify the user.
 
 import { supabase } from '@/lib/supabase';
 
 const baseUrl = process.env.EXPO_PUBLIC_API_URL;
 
-// Fail loudly on missing config — no silent fallbacks (spec §13).
+// Fail loudly on missing config — no silent fallbacks.
 if (!baseUrl) {
   throw new Error(
     'Missing EXPO_PUBLIC_API_URL. Copy mobile/.env.example to mobile/.env and set the ' +

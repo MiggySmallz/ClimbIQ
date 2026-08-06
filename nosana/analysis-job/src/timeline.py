@@ -1,7 +1,7 @@
-# Timeline artifact (spec §10 note): the per-frame series for the report
-# screen's biomechanics chart live in R2 as timeline.json — heavy data never
-# goes in the Postgres report row. Values are body-scale-normalized (torsos)
-# so the chart is comparable across videos; null = not measurable that frame.
+# Timeline artifact: the per-frame series for the report screen's biomechanics
+# chart live in R2 as timeline.json — heavy data never goes in the Postgres
+# report row. Values are body-scale-normalized (torsos) so the chart is
+# comparable across videos; null = not measurable that frame.
 import json
 from pathlib import Path
 

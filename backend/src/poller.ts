@@ -1,7 +1,7 @@
-// Job poller (spec §7.2, §8.3, M3.7). Every 30 s it advances non-terminal jobs:
-// polls Nosana state → on completion validates + ingests result.json → on
-// failure/timeout retries up to 2× then fails the job. Single-instance safe (one
-// in-flight tick at a time); use FOR UPDATE SKIP LOCKED if ever scaled out.
+// Job poller. Every 30 s it advances non-terminal jobs: polls Nosana state → on
+// completion validates + ingests result.json → on failure/timeout retries up to
+// 2× then fails the job. Single-instance safe (one in-flight tick at a time);
+// use FOR UPDATE SKIP LOCKED if ever scaled out.
 
 import { postAndRecordJob } from './analysis/dispatch.js';
 import { loadNosanaConfig } from './config.js';
@@ -11,11 +11,9 @@ import { ingestReport, type JobVideo } from './reports/ingest.js';
 import type { FastifyInstance } from 'fastify';
 
 const POLL_INTERVAL_MS = 30_000;
-const MAX_ATTEMPTS = 3; // initial + 2 retries (§8.3)
-// Per-attempt budget before the poller declares a timeout. Derived from the
-// configured Nosana job timeout (NOSANA_JOB_TIMEOUT_S) so a slow cold-node run
-// isn't killed before the market itself would, plus a 5-min grace for polling
-// lag (§8.3).
+const MAX_ATTEMPTS = 3; // initial + 2 retries
+// Grace added to the configured Nosana job timeout before the poller declares a
+// timeout, so a slow cold-node run isn't killed before the market itself would.
 const TIMEOUT_GRACE_MS = 5 * 60_000;
 
 type FailReason = 'stopped' | 'timeout' | 'bad_output';
@@ -53,7 +51,7 @@ async function tick(app: FastifyInstance): Promise<void> {
   try {
     nosanaConfig = loadNosanaConfig();
   } catch {
-    return; // Nosana not configured yet (owner action) — nothing to poll.
+    return; // Nosana not configured yet — nothing to poll.
   }
   const poster = createAnalysisJobPoster(nosanaConfig);
 
@@ -124,8 +122,8 @@ async function failJob(
   sampleFps: number,
   recipientUserId: string,
 ): Promise<void> {
-  // Retry: bump attempt, clear the old Nosana id, re-post the SAME report_id
-  // (same R2 key prefix) so the artifacts land where the report will point.
+  // Retry: bump attempt, clear the old Nosana id, re-post the same report_id so
+  // the artifacts land where the report will point.
   if (job.attempt < MAX_ATTEMPTS && job.report_id && job.videos) {
     await app.supabase
       .from('analysis_jobs')
@@ -150,7 +148,7 @@ async function failJob(
     return;
   }
 
-  // Retries exhausted → terminal, user-visible failure (§8.3).
+  // Retries exhausted → terminal, user-visible failure.
   await app.supabase
     .from('analysis_jobs')
     .update({

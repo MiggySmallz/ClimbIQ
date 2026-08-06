@@ -17,19 +17,19 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
   });
 
   // Service-role client: bypasses RLS for orchestrator writes and verifies
-  // client JWTs. Never leaves this process (spec §13).
+  // client JWTs. Never leaves this process.
   const supabase: SupabaseClient = createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   app.decorate('supabase', supabase);
 
-  // R2 (S3-compatible) client for presigned uploads/downloads (§8.2, §9).
+  // R2 (S3-compatible) client for presigned uploads/downloads.
   app.decorate('r2', { client: createR2Client(config), bucket: config.r2Bucket });
 
   await app.register(authPlugin, { supabase });
 
-  // Never leak internals to clients (spec §3): 4xx keep their message
-  // (Fastify schema-validation errors etc.), everything else is generic.
+  // Never leak internals: 4xx keep their message (schema-validation errors etc.),
+  // everything else is generic.
   app.setErrorHandler((error: FastifyError, request, reply) => {
     request.log.error(error);
     const status = error.statusCode && error.statusCode < 500 ? error.statusCode : 500;
@@ -38,7 +38,6 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
 
   app.get('/health', { config: { public: true } }, async () => ({ status: 'ok' }));
 
-  // Minimal authenticated endpoint: exercises the JWT middleware end-to-end.
   app.get('/me', async (request) => ({ user_id: request.userId }));
 
   registerVideoRoutes(app);

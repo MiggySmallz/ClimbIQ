@@ -1,18 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  SectionList,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Pressable, SectionList, TextInput, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
-import { ThemedText } from '@/components/themed-text';
+import { ErrorState, NavBar, Screen, Txt } from '@/components/ui';
+import { radius } from '@/constants/design';
 import {
   splitFriendships,
   useAcceptFriendRequest,
@@ -27,13 +20,84 @@ import { useTheme } from '@/hooks/use-theme';
 
 type RelationTo = 'friend' | 'incoming' | 'outgoing' | 'none';
 
-function PersonRow({ profile, children }: { profile: ProfileLite; children: React.ReactNode }) {
+function ActionPill({
+  label,
+  tone,
+  icon,
+  onPress,
+  disabled,
+}: {
+  label?: string;
+  tone: 'accent' | 'good' | 'bad' | 'chip' | 'goodTint';
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  onPress?: () => void;
+  disabled?: boolean;
+}) {
+  const theme = useTheme();
+  const map = {
+    accent: { bg: theme.accent, fg: '#fff' },
+    good: { bg: theme.good, fg: '#fff' },
+    bad: { bg: theme.bad, fg: '#fff' },
+    chip: { bg: theme.chip, fg: theme.ink2 },
+    goodTint: { bg: 'rgba(23,160,90,0.14)', fg: theme.good },
+  }[tone];
   return (
-    <View style={styles.row}>
-      <Avatar url={profile.avatar_url} username={profile.username} size={40} />
-      <ThemedText style={styles.rowName} numberOfLines={1}>
-        @{profile.username}
-      </ThemedText>
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderRadius: 10,
+        backgroundColor: map.bg,
+        opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
+      })}>
+      {icon ? <Ionicons name={icon} size={13} color={map.fg} /> : null}
+      {label ? (
+        <Txt weight={700} size={12} color={map.fg}>
+          {label}
+        </Txt>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function PersonRow({
+  profile,
+  subtitle,
+  children,
+}: {
+  profile: ProfileLite;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  const theme = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 11,
+        paddingHorizontal: 14,
+        paddingVertical: 13,
+        borderRadius: radius.lg,
+        backgroundColor: theme.card,
+        borderWidth: 1,
+        borderColor: theme.line,
+      }}>
+      <Avatar url={profile.avatar_url} username={profile.username} size={38} tint={theme.accent} />
+      <View style={{ flex: 1 }}>
+        <Txt weight={700} size={14} numberOfLines={1}>
+          @{profile.username}
+        </Txt>
+        {subtitle ? (
+          <Txt weight={600} size={11} color="ink2">
+            {subtitle}
+          </Txt>
+        ) : null}
+      </View>
       {children}
     </View>
   );
@@ -79,7 +143,6 @@ export default function FriendsScreen() {
       onError: () => Alert.alert('Friends', 'Could not send the request. Try again.'),
     });
   }
-
   function onAccept(profile: ProfileLite) {
     accept.mutate(profile.id, {
       onError: () => Alert.alert('Friends', 'Could not accept the request. Try again.'),
@@ -89,24 +152,13 @@ export default function FriendsScreen() {
   function searchAction(profile: ProfileLite) {
     switch (relationTo(profile.id)) {
       case 'friend':
-        return <ThemedText themeColor="textSecondary" style={styles.stateText}>Friends</ThemedText>;
+        return <ActionPill tone="goodTint" icon="checkmark" label="Friends" />;
       case 'outgoing':
-        return <ThemedText themeColor="textSecondary" style={styles.stateText}>Requested</ThemedText>;
+        return <ActionPill tone="chip" label="Requested" />;
       case 'incoming':
-        return (
-          <Pressable style={styles.primaryAction} onPress={() => onAccept(profile)}>
-            <Text style={styles.primaryActionText}>Accept</Text>
-          </Pressable>
-        );
+        return <ActionPill tone="good" label="Accept" onPress={() => onAccept(profile)} />;
       default:
-        return (
-          <Pressable
-            style={styles.primaryAction}
-            onPress={() => onSend(profile)}
-            disabled={send.isPending}>
-            <Text style={styles.primaryActionText}>Add</Text>
-          </Pressable>
-        );
+        return <ActionPill tone="accent" label="Add" onPress={() => onSend(profile)} disabled={send.isPending} />;
     }
   }
 
@@ -122,126 +174,109 @@ export default function FriendsScreen() {
     ? search.isSuccess && (search.data?.length ?? 0) === 0
     : friendships.isSuccess && sections.length === 0;
 
-  return (
-    <View style={styles.container}>
-      <View style={[styles.searchBox, { backgroundColor: theme.backgroundElement }]}>
-        <Ionicons name="search" size={18} color={theme.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: theme.text }]}
-          placeholder="Find friends by username"
-          placeholderTextColor={theme.textSecondary}
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={query}
-          onChangeText={setQuery}
-        />
-        {query.length > 0 && (
-          <Pressable onPress={() => setQuery('')} hitSlop={8}>
-            <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
-          </Pressable>
-        )}
-      </View>
+  const loading = searching ? search.isPending : friendships.isPending;
+  const errored = searching ? search.isError : friendships.isError;
 
-      {(searching ? search.isPending : friendships.isPending) ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" />
+  const searchBox = (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 16,
+        borderRadius: radius.md,
+        backgroundColor: theme.card,
+        borderWidth: 1,
+        borderColor: searching ? theme.accent : theme.line,
+      }}>
+      <Ionicons name="search" size={17} color={theme.ink3} />
+      <TextInput
+        style={{ flex: 1, fontSize: 15, paddingVertical: 14, color: theme.ink }}
+        placeholder="Search by username"
+        placeholderTextColor={theme.ink3}
+        autoCapitalize="none"
+        autoCorrect={false}
+        value={query}
+        onChangeText={setQuery}
+      />
+      {query.length > 0 ? (
+        <Pressable onPress={() => setQuery('')} hitSlop={8}>
+          <Ionicons name="close-circle" size={18} color={theme.ink3} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
+  return (
+    <Screen edges={['top']}>
+      <NavBar title="Friends" onBack={() => router.back()} />
+      <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>{searchBox}</View>
+
+      {loading ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Txt weight={600} color="ink2">
+            {searching ? 'Searching…' : 'Loading friends…'}
+          </Txt>
         </View>
-      ) : (searching ? search.isError : friendships.isError) ? (
-        <View style={styles.center}>
-          <ThemedText themeColor="textSecondary">
-            {searching ? "Search didn't go through." : "Couldn't load your friends."}
-          </ThemedText>
-          <Pressable
-            style={styles.retryButton}
-            onPress={() => (searching ? search.refetch() : friendships.refetch())}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
+      ) : errored ? (
+        <View style={{ paddingHorizontal: 20 }}>
+          <ErrorState
+            title={searching ? "Search didn't go through" : "Couldn't load your friends"}
+            onRetry={() => (searching ? search.refetch() : friendships.refetch())}
+          />
         </View>
       ) : showEmpty ? (
-        <View style={styles.center}>
-          <ThemedText style={styles.emptyTitle}>
-            {searching ? 'No one found' : 'No friends yet'}
-          </ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.emptyHint}>
-            {searching
-              ? 'Try a different username.'
-              : 'Search for friends by username to send a request.'}
-          </ThemedText>
+        <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
+          <View style={{ padding: 20, borderRadius: radius.lg, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.line, gap: 6 }}>
+            <Txt weight={700} size={15}>
+              {searching ? `No one found for “${query.trim()}”` : 'No friends yet'}
+            </Txt>
+            <Txt weight={500} size={12} lh={18} color="ink2">
+              {searching
+                ? 'Usernames are exact. Ask them to check their handle in Profile.'
+                : "Search a username to send your first request. Nobody sees your reports until you switch one to Friends."}
+            </Txt>
+          </View>
         </View>
       ) : (
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.profile.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
+          stickySectionHeadersEnabled={false}
           renderSectionHeader={({ section }) =>
             searching ? null : (
-              <ThemedText themeColor="textSecondary" style={styles.sectionHeader}>
-                {section.title}
-              </ThemedText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 8 }}>
+                <Txt weight={700} size={13} tracking={0.2}>
+                  {section.title}
+                </Txt>
+                <Txt font="mono" weight={700} size={11} color="ink3">
+                  {section.data.length}
+                </Txt>
+              </View>
             )
           }
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           renderItem={({ item, section }) => (
-            <PersonRow profile={item.profile}>
+            <PersonRow
+              profile={item.profile}
+              subtitle={!searching && section.title === 'Sent' ? 'request sent' : undefined}>
               {searching ? (
                 searchAction(item.profile)
               ) : section.title === 'Requests' ? (
-                <>
-                  <Pressable style={styles.primaryAction} onPress={() => onAccept(item.profile)}>
-                    <Text style={styles.primaryActionText}>Accept</Text>
-                  </Pressable>
-                  <Pressable hitSlop={8} onPress={() => confirmRemove(item.profile, 'Decline')}>
-                    <Ionicons name="close" size={22} color={theme.textSecondary} />
-                  </Pressable>
-                </>
+                <View style={{ flexDirection: 'row', gap: 7 }}>
+                  <ActionPill tone="good" label="Accept" onPress={() => onAccept(item.profile)} />
+                  <ActionPill tone="bad" icon="close" onPress={() => confirmRemove(item.profile, 'Decline')} />
+                </View>
               ) : section.title === 'Sent' ? (
-                <Pressable hitSlop={8} onPress={() => confirmRemove(item.profile, 'Cancel request')}>
-                  <ThemedText themeColor="textSecondary" style={styles.stateText}>Cancel</ThemedText>
-                </Pressable>
+                <ActionPill tone="chip" label="Cancel" onPress={() => confirmRemove(item.profile, 'Cancel request')} />
               ) : (
-                <Pressable hitSlop={8} onPress={() => confirmRemove(item.profile, 'Remove')}>
-                  <Ionicons name="person-remove-outline" size={20} color={theme.textSecondary} />
-                </Pressable>
+                <ActionPill tone="chip" label="Remove" onPress={() => confirmRemove(item.profile, 'Remove')} />
               )}
             </PersonRow>
           )}
         />
       )}
-    </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 12 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 24 },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 12,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-  },
-  searchInput: { flex: 1, fontSize: 16, paddingVertical: 10 },
-  list: { padding: 12, paddingBottom: 48 },
-  sectionHeader: { fontSize: 13, fontWeight: '600', marginTop: 12, marginBottom: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  rowName: { flex: 1, fontSize: 16, fontWeight: '600' },
-  stateText: { fontSize: 14 },
-  primaryAction: {
-    backgroundColor: '#208AEF',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  primaryActionText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  emptyTitle: { fontSize: 18, fontWeight: '600' },
-  emptyHint: { fontSize: 14, textAlign: 'center' },
-  retryButton: {
-    marginTop: 8,
-    backgroundColor: '#208AEF',
-    borderRadius: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  retryText: { color: '#fff', fontWeight: '600' },
-});

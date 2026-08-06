@@ -1,8 +1,8 @@
-# Overlay clip render (spec §8.1): skeleton drawn on the sampled frames,
-# encoded to 720p H.264 with ffmpeg. Frames are streamed straight into
-# ffmpeg's stdin one at a time (spec §3: never buffer the video). The clip
-# plays at sample_fps real-time pacing, so a frame at t=12.4s sits at 12.4s
-# in the clip — issue-card seek timestamps (§6) line up 1:1.
+# Overlay clip render: skeleton drawn on the sampled frames, encoded to 720p
+# H.264 with ffmpeg. Frames are streamed straight into ffmpeg's stdin one at a
+# time (never buffer the video). The clip plays at sample_fps real-time pacing,
+# so a frame at t=12.4s sits at 12.4s in the clip — issue-card seek timestamps
+# line up 1:1.
 import subprocess
 from pathlib import Path
 

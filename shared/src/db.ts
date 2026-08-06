@@ -1,5 +1,5 @@
 // Row types mirroring backend/supabase/migrations. Keep in sync with SQL — the
-// migrations are the source of truth (spec §7.1).
+// migrations are the source of truth.
 
 import type { Observation, Positive, Scores } from './report.js';
 
@@ -16,7 +16,7 @@ export interface Climb {
   user_id: string;
   name: string;
   location: string | null;
-  /** V-scale string, e.g. "V4" — kept flexible per spec §9. */
+  /** V-scale string, e.g. "V4" — kept flexible. */
   grade: string | null;
   style: string | null;
   sent: boolean;
@@ -45,7 +45,7 @@ export interface Video {
   width: number | null;
   height: number | null;
   size_bytes: number | null;
-  /** ISO timestamp — created_at + 30 days (spec §9). */
+  /** ISO timestamp — created_at + 30 days. */
   expires_at: string;
   created_at: string;
 }
@@ -57,7 +57,7 @@ export interface AnalysisJob {
   video_id: string;
   status: JobStatus;
   /** Report id pre-allocated at post time — the R2 key prefix for the artifacts
-   *  and the eventual reports.id on insert (spec §9 note; M3.5/M3.7). */
+   *  and the eventual reports.id on insert. */
   report_id: string | null;
   nosana_job_id: string | null;
   nosana_market: string | null;
@@ -65,8 +65,7 @@ export interface AnalysisJob {
   error: string | null;
   posted_at: string | null;
   finished_at: string | null;
-  /** Total Nosana Credits cost (USD) across attempts; null until first post
-   *  (spec §8.3, M6.2). */
+  /** Total Nosana Credits cost (USD) across attempts; null until first post. */
   cost_usd: number | null;
   created_at: string;
 }
@@ -88,7 +87,7 @@ export interface ReportRow {
   climb_id: string | null;
   /** Report-contract version (mirrors result.json `version`). The client checks
    * this before rendering and shows an "update the app" fallback for unknown
-   * versions (spec §10). Set by the orchestrator from result.json (M3.7). */
+   * versions. */
   version: number;
   observations: Observation[];
   positives: Positive[];
@@ -104,8 +103,7 @@ export interface ReportRow {
 
 export type FriendshipStatus = 'pending' | 'accepted';
 
-/** `user_id` = requester, `friend_id` = addressee; one row per pair,
- * `accepted` means mutual. */
+/** `user_id` = requester, `friend_id` = addressee; one row per pair. */
 export interface Friendship {
   user_id: string;
   friend_id: string;

@@ -1,6 +1,6 @@
-// Post a Nosana analysis job for an existing analysis_jobs row (spec §7.2).
-// Shared by the M3.5 route (first attempt) and the M3.7 poller (retries) so the
-// presign-and-post logic lives in one place.
+// Post a Nosana analysis job for an existing analysis_jobs row. Shared by the
+// analyze route (first attempt) and the poller (retries) so the presign-and-post
+// logic lives in one place.
 
 import type { FastifyInstance } from 'fastify';
 
@@ -57,7 +57,7 @@ export async function postAndRecordJob(
     params: { video_id: input.videoId, sample_fps: input.sampleFps, declared_grade: null },
   });
   // Accumulate cost across attempts — each post charges Credits, so a retried
-  // job's spend is the sum, not just the last run's (§8.3 cost logging, M6.2).
+  // job's spend is the sum, not just the last run's.
   const { data: prior } = await app.supabase
     .from('analysis_jobs')
     .select('cost_usd')

@@ -1,6 +1,6 @@
-# llm_context (spec §3, §8.1): the one compact structured summary the LLM
-# receives — ranked issues with evidence and timestamps, positives, grip
-# distribution, scores. Never bulk keypoints, never per-frame series.
+# llm_context: the one compact structured summary the LLM receives — ranked
+# issues with evidence and timestamps, positives, grip distribution, scores.
+# Never bulk keypoints, never per-frame series.
 from features import ClimbFeatures
 from job_env import JobParams
 from rules import RuleResult

@@ -1,76 +1,113 @@
-import { Image } from 'expo-image';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, View } from 'react-native';
 
-const STRIP_HEIGHT = 64;
+const TRACK_HEIGHT = 56;
 const HANDLE_WIDTH = 22;
 const MIN_GAP_MS = 500;
 // Side gutters keep both handles clear of the OS edge-swipe-back gesture zone,
 // which otherwise steals the drag when a handle sits at full-range against the
-// screen edge. The strip is inset by the same gutter.
+// screen edge. The track is inset by the same gutter.
 const GUTTER = 32;
 // Enlarge each handle's touch target well past its 22px visual width so it's
-// easy to grab (the whole strip is no longer draggable — the handles are).
+// easy to grab.
 const HANDLE_HITSLOP = { top: 12, bottom: 12, left: 18, right: 18 };
 
 interface Props {
-  thumbnails: string[];
   durationMs: number;
   startMs: number;
   endMs: number;
   onChange: (startMs: number, endMs: number) => void;
+  /** The dragged edge's position, fired continuously during a drag — the parent
+   *  seeks the video preview to this time so the user sees the exact frame. */
+  onScrub?: (ms: number) => void;
+  /** The dragged edge's final position on release (precise seek). */
+  onScrubEnd?: (ms: number) => void;
+}
+
+/** Everything the gesture callbacks read, kept fresh via a ref so the two
+ *  PanResponders can be created ONCE and never recreated mid-drag. */
+interface Live {
+  startMs: number;
+  endMs: number;
+  durationMs: number;
+  trackW: number;
+  onChange: Props['onChange'];
+  onScrub: Props['onScrub'];
+  onScrubEnd: Props['onScrubEnd'];
 }
 
 /**
- * Two-handle trim range over a thumbnail strip (spec §6, M3.14). Each handle has
- * its own PanResponder and drags by gesture delta (`dx`), which is robust to
- * which child element the finger lands on — the shared-track "grab nearest
- * handle" approach didn't register drags on device (M3.19).
+ * Two-handle trim range over a plain scrub track. Dragging an edge seeks the live
+ * video preview. Each handle has its own PanResponder and drags by gesture delta
+ * (`dx`). The responders are created once and read live state from a ref:
+ * recreating a PanResponder mid-drag tears down the active gesture, so the handle
+ * would "snap back" instead of tracking the finger.
  */
-export function TrimRange({ thumbnails, durationMs, startMs, endMs, onChange }: Props) {
+export function TrimRange({ durationMs, startMs, endMs, onChange, onScrub, onScrubEnd }: Props) {
   const [width, setWidth] = useState(0);
   const trackW = Math.max(width - 2 * GUTTER, 1);
   const msToX = (ms: number) => GUTTER + (ms / durationMs) * trackW;
 
-  // The ms value of the handle being dragged, captured on grant so the move
-  // handler can apply a gesture delta (`dx`). Only read/written inside the
-  // gesture callbacks (native touches), never during render.
-  const grabbed = useRef(0);
+  // Latest props for the gesture callbacks. Synced after every render (not
+  // during) so it stays compiler-safe; a drag only starts after a render anyway.
+  const live = useRef<Live>({ startMs, endMs, durationMs, trackW, onChange, onScrub, onScrubEnd });
+  useEffect(() => {
+    live.current = { startMs, endMs, durationMs, trackW, onChange, onScrub, onScrubEnd };
+  });
 
-  const startPan = useMemo(
-    () =>
-      // eslint-disable-next-line react-hooks/refs
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          grabbed.current = startMs;
-        },
-        onPanResponderMove: (_e, g) => {
-          const deltaMs = (g.dx / trackW) * durationMs;
-          const next = Math.max(0, Math.min(grabbed.current + deltaMs, endMs - MIN_GAP_MS));
-          onChange(next, endMs);
-        },
-      }),
-    [trackW, durationMs, startMs, endMs, onChange],
+  // The handle's ms value at grab time; the move handler applies the gesture
+  // delta (`dx`) to it. `active` holds the latest value so release can report it.
+  const grabbed = useRef(0);
+  const active = useRef(0);
+
+  // Lazy `useState` initializers run once, so each responder has a stable
+  // identity and an in-flight drag is never torn down by a re-render. Dynamic
+  // state is read from `live` inside the callbacks (which run at gesture time).
+  // eslint-disable-next-line react-hooks/refs
+  const [startPan] = useState(() =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      // Once we own the drag, don't let a parent ScrollView reclaim it.
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        grabbed.current = live.current.startMs;
+        active.current = live.current.startMs;
+        live.current.onScrub?.(live.current.startMs);
+      },
+      onPanResponderMove: (_e, g) => {
+        const l = live.current;
+        const deltaMs = (g.dx / l.trackW) * l.durationMs;
+        const next = Math.max(0, Math.min(grabbed.current + deltaMs, l.endMs - MIN_GAP_MS));
+        active.current = next;
+        l.onChange(next, l.endMs);
+        l.onScrub?.(next);
+      },
+      onPanResponderRelease: () => live.current.onScrubEnd?.(active.current),
+    }),
   );
 
-  const endPan = useMemo(
-    () =>
-      // eslint-disable-next-line react-hooks/refs
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          grabbed.current = endMs;
-        },
-        onPanResponderMove: (_e, g) => {
-          const deltaMs = (g.dx / trackW) * durationMs;
-          const next = Math.min(durationMs, Math.max(grabbed.current + deltaMs, startMs + MIN_GAP_MS));
-          onChange(startMs, next);
-        },
-      }),
-    [trackW, durationMs, startMs, endMs, onChange],
+  // eslint-disable-next-line react-hooks/refs
+  const [endPan] = useState(() =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        grabbed.current = live.current.endMs;
+        active.current = live.current.endMs;
+        live.current.onScrub?.(live.current.endMs);
+      },
+      onPanResponderMove: (_e, g) => {
+        const l = live.current;
+        const deltaMs = (g.dx / l.trackW) * l.durationMs;
+        const next = Math.min(l.durationMs, Math.max(grabbed.current + deltaMs, l.startMs + MIN_GAP_MS));
+        active.current = next;
+        l.onChange(l.startMs, next);
+        l.onScrub?.(next);
+      },
+      onPanResponderRelease: () => live.current.onScrubEnd?.(active.current),
+    }),
   );
 
   const startX = msToX(startMs);
@@ -78,19 +115,12 @@ export function TrimRange({ thumbnails, durationMs, startMs, endMs, onChange }: 
 
   return (
     <View style={styles.container} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      <View style={styles.strip}>
-        {thumbnails.map((uri, i) => (
-          <Image key={i} source={{ uri }} style={styles.thumb} contentFit="cover" />
-        ))}
-      </View>
+      <View style={styles.track} />
 
       {width > 0 && (
         <>
-          {/* dimmed regions outside the selection (within the inset strip) */}
-          <View
-            style={[styles.dim, { left: GUTTER, width: startX - GUTTER }]}
-            pointerEvents="none"
-          />
+          {/* dimmed regions outside the selection */}
+          <View style={[styles.dim, { left: GUTTER, width: startX - GUTTER }]} pointerEvents="none" />
           <View style={[styles.dim, { left: endX, right: GUTTER }]} pointerEvents="none" />
 
           {/* selection border */}
@@ -119,21 +149,18 @@ export function TrimRange({ thumbnails, durationMs, startMs, endMs, onChange }: 
 }
 
 const styles = StyleSheet.create({
-  container: { height: STRIP_HEIGHT, justifyContent: 'center' },
-  strip: {
-    flexDirection: 'row',
-    height: STRIP_HEIGHT,
+  container: { height: TRACK_HEIGHT, justifyContent: 'center' },
+  track: {
+    height: TRACK_HEIGHT,
     marginHorizontal: GUTTER,
     borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#00000020',
+    backgroundColor: 'rgba(128,128,128,0.28)',
   },
-  thumb: { flex: 1, height: STRIP_HEIGHT },
   dim: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 8,
   },
   selection: {
@@ -141,7 +168,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     borderWidth: 3,
-    borderColor: '#208AEF',
+    borderColor: '#3D81DC',
     borderRadius: 8,
   },
   handle: {
@@ -149,7 +176,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: HANDLE_WIDTH,
-    backgroundColor: '#208AEF',
+    backgroundColor: '#3D81DC',
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',

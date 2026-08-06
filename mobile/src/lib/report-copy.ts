@@ -1,8 +1,7 @@
-// Presentation metadata for the report contract (spec §10). The stable key
-// vocabulary and its detection rules live in `@climbiq/shared`; the human-facing
-// labels/colors are UI concerns and stay here. Keep the maps exhaustive over the
-// shared key enums — an unknown key falls back to a de-cased label so a newer
-// report never renders a blank card on an older app (spec §10, additive-only).
+// Presentation metadata for the report contract. The stable key vocabulary and
+// its detection rules live in `@climbiq/shared`; the human-facing labels/colors
+// stay here. An unknown key falls back to a de-cased label so a newer report
+// never renders a blank card on an older app.
 
 import type { IssueKey, PositiveKey, Severity } from '@climbiq/shared';
 
@@ -50,7 +49,7 @@ export function severityStyle(severity: Severity): SeverityStyle {
   return SEVERITY_STYLES[severity] ?? SEVERITY_STYLES.low;
 }
 
-/** Score-category display order + labels (spec §10 `scores`). */
+/** Score-category display order + labels. */
 export const SCORE_CATEGORIES: { key: 'balance' | 'footwork' | 'grip' | 'body_position'; label: string }[] =
   [
     { key: 'balance', label: 'Balance' },

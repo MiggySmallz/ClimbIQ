@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://climbiq.app/schema/error.schema.json",
   "title": "AnalysisErrorResult",
-  "description": "Structured error JSON PUT to RESULT_PUT_URL on job failure, spec §8.1. Mirrors shared/src/report.ts AnalysisErrorResult — keep in sync.",
+  "description": "Structured error JSON PUT to RESULT_PUT_URL on job failure. Mirrors shared/src/report.ts AnalysisErrorResult — keep in sync.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "video_id", "error"],

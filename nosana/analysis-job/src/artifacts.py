@@ -1,6 +1,6 @@
-# Artifact transfer behind one interface (spec §8.1): presigned HTTP(S)
-# GET/PUT in production, file:// or plain local paths for local dev. No cloud
-# SDKs here — presigned URLs are just HTTP.
+# Artifact transfer behind one interface: presigned HTTP(S) GET/PUT in
+# production, file:// or plain local paths for local dev. No cloud SDKs here —
+# presigned URLs are just HTTP.
 import shutil
 import urllib.request
 from pathlib import Path
@@ -18,8 +18,8 @@ def _local_path(url: str) -> Path | None:
 
 
 def fetch(url: str, dest: Path) -> None:
-    """Download (or copy) the video to a local working path, streaming —
-    never the whole file in RAM (spec §3)."""
+    """Download (or copy) the video to a local working path, streaming — never
+    the whole file in RAM."""
     src = _local_path(url)
     dest.parent.mkdir(parents=True, exist_ok=True)
     if src is not None:

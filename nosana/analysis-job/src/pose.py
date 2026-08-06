@@ -1,16 +1,14 @@
-# Pose stage (spec §8.1, §14.3): YOLOX person bboxes per frame → track the
-# largest/most-central person → RTMW wholebody on the tracked bbox only
-# (never full-frame, spec §3) → 5-frame median temporal smoothing.
-#
-# Models are loaded once at construction (spec §3); frames are processed
-# strictly sequentially — that is the pipeline's explicit concurrency cap (1).
+# Pose stage: YOLOX person bboxes per frame → track the largest/most-central
+# person → RTMW wholebody on the tracked bbox only (never full-frame) → 5-frame
+# median temporal smoothing. Models load once at construction; frames are
+# processed strictly sequentially (concurrency cap of 1).
 from dataclasses import dataclass
 
 import numpy as np
 from rtmlib import RTMPose, YOLOX, Wholebody
 
-# Same models the image bakes (scripts/bake_models.py) — constructing from
-# Wholebody.MODE guarantees the rtmlib cache hit instead of a runtime download.
+# Same models the image bakes — constructing from Wholebody.MODE guarantees the
+# rtmlib cache hit instead of a runtime download.
 _MODE = Wholebody.MODE['performance']
 
 # Below this IoU the detection is treated as a different person than the one
@@ -40,9 +38,8 @@ def _iou(a: np.ndarray, b: np.ndarray) -> float:
 def _select_person(
     bboxes: np.ndarray, prev_bbox: np.ndarray | None, frame_shape: tuple
 ) -> np.ndarray | None:
-    """Track by IoU continuity with the previous frame; when that breaks
-    (first frame, occlusion, person lost), fall back to largest/most-central
-    (spec §14.3 default for multiple climbers)."""
+    """Track by IoU continuity with the previous frame; when that breaks (first
+    frame, occlusion, person lost), fall back to largest/most-central."""
     if len(bboxes) == 0:
         return None
     if prev_bbox is not None:
@@ -88,9 +85,9 @@ class PoseEngine:
 
 
 def smooth_keypoints(frames: list[PoseFrame], window: int = 5) -> list[PoseFrame]:
-    """Temporal smoothing (spec §8.1): centered median over `window` detected
-    frames, per keypoint coordinate. Undetected frames pass through and don't
-    contribute to neighbours' medians."""
+    """Temporal smoothing: centered median over `window` detected frames, per
+    keypoint coordinate. Undetected frames pass through and don't contribute to
+    neighbours' medians."""
     detected = [i for i, f in enumerate(frames) if f.keypoints is not None]
     if len(detected) < 3:
         return frames

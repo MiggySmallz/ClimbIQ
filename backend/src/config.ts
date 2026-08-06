@@ -1,22 +1,19 @@
-// Env-only config (spec §13): a missing required secret fails startup loudly —
-// no hardcoded fallbacks, ever.
+// Env-only config: a missing required secret fails startup loudly — no fallbacks.
 
 export interface Config {
   port: number;
   logLevel: string;
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
-  /** Cloudflare R2 (S3-compatible) — presigned upload/download URLs (§8.2, §9). */
+  /** Cloudflare R2 (S3-compatible) — presigned upload/download URLs. */
   r2AccountId: string;
   r2AccessKeyId: string;
   r2SecretAccessKey: string;
   r2Bucket: string;
-  /** Optional: the project owner's Supabase user id. When set, unlocks the
-   *  owner-only cost summary at `GET /admin/usage` (spec §8.3, M6.2). Unset =
-   *  the endpoint is off (404 for everyone). */
+  /** Project owner's Supabase user id. When set, unlocks `GET /admin/usage`;
+   *  unset = the endpoint is off (404 for everyone). */
   ownerUserId: string | null;
-  /** Low-Credits alert threshold (USD): `GET /admin/usage` flags the balance as
-   *  "low" when available Credits fall below this. Default 5 (spec §13, M6.3). */
+  /** Low-Credits alert threshold (USD). Default 5. */
   creditsAlertUsd: number;
 }
 
@@ -49,28 +46,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 }
 
 /**
- * Nosana job-posting config (spec §8.2). Loaded separately from the core config
- * so the orchestrator can boot for health/auth work before the owner has funded
- * Credits — `loadNosanaConfig()` is called only when the Nosana poster is
- * constructed (M3.5), and fails loudly there if a secret is missing (§13).
+ * Nosana job-posting config, loaded separately from the core config so the
+ * orchestrator can boot for health/auth work before Credits are funded —
+ * `loadNosanaConfig()` runs only when the poster is constructed, and fails loudly
+ * there if a secret is missing.
  */
 export interface NosanaConfig {
-  /** Dashboard API key ("nos_…"); Credits-based auth, no wallet custody (§8.2). */
+  /** Dashboard API key ("nos_…"); Credits-based auth, no wallet custody. */
   apiKey: string;
-  /** Pinned GPU market address — one small market for warm-node reuse (§8.1). */
+  /** Pinned GPU market address — one small market for warm-node reuse. */
   market: string;
-  /** Published analysis image ref Nosana nodes pull (M3.12). */
+  /** Published analysis image ref Nosana nodes pull. */
   image: string;
-  /** Job timeout (s) handed to the market; poller enforces the 20-min budget (§8.3). */
+  /** Job timeout (s) handed to the market; the poller enforces the real budget. */
   timeoutSeconds: number;
-  /** Pose sample rate baked into JOB_PARAMS. Default 30 fps: smooth overlay
-   * playback + fine temporal resolution for dynamic moves, at ~10x the pose
-   * GPU time of the original 3 fps (owner decision 2026-07-22). */
+  /** Pose sample rate baked into JOB_PARAMS. Default 30 fps: smooth overlay + fine
+   * temporal resolution for dynamic moves, at ~10x the pose GPU time of 3 fps. */
   sampleFps: number;
-  /** Optional specific node address to run on (within `market`). When set, the
-   * job is posted targeting only that node instead of any node in the market —
-   * for pinning to a known-warm/owned node in dev. The node must be staked and
-   * running in `market`; unset = normal market-wide assignment (§8.1). */
+  /** Optional node address to pin to within `market` (dev warm-node). The node
+   * must be staked and running there; unset = normal market-wide assignment. */
   node?: string;
 }
 

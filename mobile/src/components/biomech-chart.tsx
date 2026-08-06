@@ -37,7 +37,7 @@ interface Props {
 }
 
 /**
- * Biomechanics timeline chart (M4.4), synced two-way with the video: the cursor
+ * Biomechanics timeline chart, synced two-way with the video: the cursor
  * tracks `currentTime`, and dragging across the plot calls `onSeek` so scrubbing
  * the chart seeks the video and vice versa.
  */
@@ -121,11 +121,11 @@ export function BiomechChart({ timeline, duration, currentTime, onSeek }: Props)
               onPress={() => setSeriesKey(s.key)}
               style={[
                 styles.chip,
-                { backgroundColor: active ? s.color : theme.backgroundElement },
+                { backgroundColor: active ? s.color : theme.chip },
               ]}>
               <ThemedText
                 type="small"
-                style={{ color: active ? '#fff' : theme.textSecondary, fontWeight: '600' }}>
+                style={{ color: active ? '#fff' : theme.ink2, fontWeight: '600' }}>
                 {s.label}
               </ThemedText>
             </Pressable>
@@ -154,7 +154,7 @@ export function BiomechChart({ timeline, duration, currentTime, onSeek }: Props)
                 x2={width - PAD.right}
                 y1={baselineY}
                 y2={baselineY}
-                stroke={theme.textSecondary}
+                stroke={theme.ink2}
                 strokeDasharray="4 4"
                 strokeWidth={1}
                 opacity={0.5}
@@ -167,7 +167,7 @@ export function BiomechChart({ timeline, duration, currentTime, onSeek }: Props)
               x2={cursorX}
               y1={PAD.top}
               y2={HEIGHT - PAD.bottom}
-              stroke={theme.text}
+              stroke={theme.ink}
               strokeWidth={1}
               opacity={0.6}
             />
@@ -175,14 +175,14 @@ export function BiomechChart({ timeline, duration, currentTime, onSeek }: Props)
               <Circle cx={cursorX} cy={yFor(cursorVal)} r={4} fill={def.color} />
             )}
             {/* x-axis end labels */}
-            <SvgText x={PAD.left} y={HEIGHT - 6} fontSize={11} fill={theme.textSecondary}>
+            <SvgText x={PAD.left} y={HEIGHT - 6} fontSize={11} fill={theme.ink2}>
               0:00
             </SvgText>
             <SvgText
               x={width - PAD.right}
               y={HEIGHT - 6}
               fontSize={11}
-              fill={theme.textSecondary}
+              fill={theme.ink2}
               textAnchor="end">
               {formatTime(span)}
             </SvgText>

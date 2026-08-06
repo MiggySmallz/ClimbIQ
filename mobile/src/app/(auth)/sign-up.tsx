@@ -1,46 +1,58 @@
-import { Link, router } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-} from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, View } from 'react-native';
 
-import { authStyles as s } from '@/components/auth-styles';
-import { ThemedText } from '@/components/themed-text';
+import { BrandMark } from '@/components/brand-mark';
+import { Button, Field, FieldAction, Screen, Txt } from '@/components/ui';
+import { useTheme } from '@/hooks/use-theme';
+import { signInWithGoogle } from '@/lib/google-auth';
 import { supabase } from '@/lib/supabase';
 
+/** 0..3 strength from length + character variety. */
+function passwordStrength(pw: string): number {
+  if (!pw) return 0;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[0-9]/.test(pw) && /[a-zA-Z]/.test(pw)) score++;
+  return Math.min(3, score);
+}
+
 export default function SignUpScreen() {
+  const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const strength = passwordStrength(password);
+  const strengthColor = strength >= 2 ? theme.good : strength === 1 ? theme.warn : theme.line;
+  const okLength = password.length >= 8;
 
   async function handleSignUp() {
     if (!email.trim() || !password) {
-      Alert.alert('Sign up', 'Enter an email and password.');
+      setError('Enter an email and password.');
       return;
     }
     if (password.length < 8) {
-      Alert.alert('Sign up', 'Password must be at least 8 characters.');
-      return;
-    }
-    if (password !== confirm) {
-      Alert.alert('Sign up', 'Passwords do not match.');
+      setError('Password must be at least 8 characters.');
       return;
     }
     setBusy(true);
+    setError(null);
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error: err } = await supabase.auth.signUp({
         email: email.trim(),
         password,
       });
-      if (error) {
-        Alert.alert('Sign up failed', error.message);
+      if (err) {
+        setError(
+          /already/i.test(err.message)
+            ? 'That email already has an account. Sign in instead.'
+            : err.message,
+        );
         return;
       }
       // With email confirmation enabled, no session is returned until the link is clicked.
@@ -55,45 +67,120 @@ export default function SignUpScreen() {
     }
   }
 
+  async function handleGoogleSignIn() {
+    setBusy(true);
+    try {
+      await signInWithGoogle();
+    } catch (e) {
+      Alert.alert('Google sign-in failed', e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <KeyboardAvoidingView
-      style={s.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ThemedText style={s.title}>Create account</ThemedText>
+    <Screen padded={26} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, paddingTop: 40 }}>
+          <BrandMark />
+          <Txt weight={700} size={42} lh={40} tracking={-1.9} style={{ marginTop: 46 }}>
+            Start the{'\n'}training log.
+          </Txt>
+          <Txt weight={500} size={15} lh={22} color="ink2" style={{ marginTop: 10, marginBottom: 32 }}>
+            Free. Your first video analysis takes about three minutes.
+          </Txt>
 
-      <TextInput
-        style={s.input}
-        placeholder="Email"
-        autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={s.input}
-        placeholder="Password (min 8 characters)"
-        secureTextEntry
-        autoComplete="new-password"
-        value={password}
-        onChangeText={setPassword}
-      />
-      <TextInput
-        style={s.input}
-        placeholder="Confirm password"
-        secureTextEntry
-        autoComplete="new-password"
-        value={confirm}
-        onChangeText={setConfirm}
-      />
+          <View style={{ gap: 16 }}>
+            <Field
+              label="EMAIL"
+              placeholder="you@climbiq.app"
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={(t) => {
+                setEmail(t);
+                setError(null);
+              }}
+              editable={!busy}
+            />
+            <View style={{ gap: 8 }}>
+              <Field
+                label="PASSWORD"
+                placeholder="At least 8 characters"
+                secureTextEntry={!showPw}
+                autoComplete="new-password"
+                mono
+                value={password}
+                onChangeText={(t) => {
+                  setPassword(t);
+                  setError(null);
+                }}
+                editable={!busy}
+                error={error ?? undefined}
+                right={
+                  <FieldAction
+                    label={showPw ? 'HIDE' : 'SHOW'}
+                    color={theme.ink3}
+                    onPress={() => setShowPw((v) => !v)}
+                  />
+                }
+              />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {[0, 1, 2].map((i) => (
+                  <View
+                    key={i}
+                    style={{
+                      flex: 1,
+                      height: 4,
+                      borderRadius: 2,
+                      backgroundColor: i < strength ? strengthColor : theme.line,
+                    }}
+                  />
+                ))}
+                <Txt weight={700} size={11} tracking={0.4} color={okLength ? 'good' : 'ink3'}>
+                  {okLength ? '8+ CHARS OK' : '8+ CHARS'}
+                </Txt>
+              </View>
+            </View>
+          </View>
 
-      <Pressable style={s.primaryButton} onPress={handleSignUp} disabled={busy}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryButtonText}>Sign up</Text>}
-      </Pressable>
+          <View style={{ marginTop: 28, gap: 12 }}>
+            <Button
+              label="Create account"
+              onPress={handleSignUp}
+              busy={busy}
+              busyLabel="Creating account…"
+            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.line }} />
+              <Txt weight={700} size={11} tracking={1.5} color="ink3">
+                OR
+              </Txt>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.line }} />
+            </View>
+            <Button
+              label="Continue with Google"
+              variant="secondary"
+              onPress={handleGoogleSignIn}
+              disabled={busy}
+              left={<Ionicons name="logo-google" size={18} color={theme.ink} />}
+            />
+          </View>
 
-      <Link href="/sign-in" style={s.footerLink}>
-        Already have an account? Sign in
-      </Link>
-    </KeyboardAvoidingView>
+          <View style={{ flex: 1 }} />
+          <View style={{ flexDirection: 'row', justifyContent: 'center', paddingVertical: 8 }}>
+            <Txt weight={500} size={14} color="ink2">
+              Already have an account?{' '}
+            </Txt>
+            <Txt weight={700} size={14} color="accent" onPress={() => router.replace('/sign-in')}>
+              Sign in
+            </Txt>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }

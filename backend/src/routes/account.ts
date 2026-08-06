@@ -1,13 +1,6 @@
-// Account deletion (spec §11.9, flow step 9, M6.4).
-//
-//   DELETE /me → erase the signed-in user: sweep their R2 objects + avatar, then
-//                delete the auth user, which cascade-deletes every owned row.
-//
-// The DB side is one operation: `profiles.id references auth.users on delete
-// cascade`, and climbs/videos/analysis_jobs/reports/friendships/push_tokens all
-// cascade from `profiles` (spec §9). So deleting the auth user removes all rows.
-// R2 and Storage have no cascade, so we enumerate and delete those first — while
-// the rows that name them still exist.
+// DELETE /me — erase the signed-in user. Deleting the auth user cascade-deletes
+// every owned row (profiles → climbs/videos/reports/…). R2 and Storage don't
+// cascade, so we enumerate and delete those first, while the naming rows exist.
 
 import type { FastifyInstance } from 'fastify';
 
@@ -18,8 +11,7 @@ export function registerAccountRoutes(app: FastifyInstance): void {
     const userId = request.userId;
     const { client, bucket } = app.r2;
 
-    // 1. The user's report ids — artifacts are keyed by report id, not user id,
-    //    so we need these before the rows are cascade-deleted.
+    // 1. Report ids — artifacts are keyed by report id, needed before the rows go.
     const { data: reports, error: reportsErr } = await app.supabase
       .from('reports')
       .select('id')
@@ -27,8 +19,7 @@ export function registerAccountRoutes(app: FastifyInstance): void {
     if (reportsErr) throw new Error(`reports select failed: ${reportsErr.message}`);
 
     // 2. Sweep R2: raw videos under videos/{userId}/, artifacts under reports/{id}/.
-    //    Best-effort — the account row deletion below is the real guarantee, so a
-    //    lingering blob must never block the user's erasure (§11.9).
+    //    Best-effort — a lingering blob must not block the user's erasure.
     try {
       const keys = await listObjectKeys(client, bucket, `videos/${userId}/`);
       for (const r of reports ?? []) {
@@ -51,7 +42,7 @@ export function registerAccountRoutes(app: FastifyInstance): void {
       app.log.error(err, `account deletion: avatar sweep failed for user ${userId}`);
     }
 
-    // 4. Delete the auth user → cascade-deletes profiles and everything under it.
+    // 4. Delete the auth user → cascades profiles and everything under it.
     const { error: delErr } = await app.supabase.auth.admin.deleteUser(userId);
     if (delErr) throw new Error(`auth user deletion failed: ${delErr.message}`);
 

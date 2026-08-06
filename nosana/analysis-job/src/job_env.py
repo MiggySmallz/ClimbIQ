@@ -1,6 +1,6 @@
-# Entrypoint env-var contract (spec §8.1): everything the job needs arrives
-# via env vars. URLs are presigned HTTP(S) in production; file:// or plain
-# local paths behind the same interface for local dev.
+# Entrypoint env-var contract: everything the job needs arrives via env vars.
+# URLs are presigned HTTP(S) in production; file:// or plain local paths behind
+# the same interface for local dev.
 import base64
 import binascii
 import json
@@ -37,10 +37,9 @@ def _require(name: str) -> str:
 
 
 def load_job_env() -> JobEnv:
-    # JOB_PARAMS is base64-encoded JSON, not raw JSON: a raw `{...}` value is
-    # valid JSON and Nosana's node corrupts a JSON-object-looking env var in
-    # transit to the container. base64 (kept out of that transformation) arrives
-    # intact. Encoded by buildEnv in backend/src/nosana/jobDefinition.ts.
+    # JOB_PARAMS is base64-encoded JSON, not raw JSON: Nosana's node corrupts a
+    # JSON-object-looking env var in transit to the container, while base64
+    # arrives intact. Encoded by buildEnv in jobDefinition.ts.
     encoded = _require('JOB_PARAMS')
     try:
         raw_params = base64.b64decode(encoded, validate=True).decode('utf-8')

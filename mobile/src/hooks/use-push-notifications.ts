@@ -1,7 +1,3 @@
-// Push wiring mounted once under the auth provider (spec §7.2, M3.10/M3.17):
-// registers this device on sign-in and deep-links notification taps to the
-// report (done) or the status/retry screen (failure).
-
 import type { PushData } from '@climbiq/shared';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';

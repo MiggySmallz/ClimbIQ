@@ -1,11 +1,7 @@
-// Nosana job posting (spec §8.2) — the ONE place payment mode lives, so the
-// documented wallet-keypair fallback would touch only this file.
-//
-// API-first: authenticate with a dashboard API key + Credits (no Solana key
-// custody). Posting a job = pin the definition to IPFS → `list` it on the pinned
-// GPU market (Credits-charged create). Can't actually run until the owner funds
-// Credits (M3.6 owner-action); the module + its pure builder are complete and
-// the built JSON is unit-tested.
+// Nosana job posting — the one place payment mode lives, so a wallet-keypair
+// fallback would touch only this file. API-first: authenticate with a dashboard
+// API key + Credits (no Solana key custody). Posting = pin the definition to IPFS
+// → `list` it on the pinned GPU market (Credits-charged).
 
 import { createNosanaClient, NosanaNetwork, validateJobDefinition } from '@nosana/kit';
 import type { NosanaClient } from '@nosana/kit';
@@ -31,7 +27,7 @@ export interface PostedJob {
   market: string;
   /** IPFS hash of the posted job definition (for debugging/traceability). */
   ipfsHash: string;
-  /** Credits cost of this run (USD) → cost logging (M6.2). */
+  /** Credits cost of this run (USD). */
   costUsd: number;
 }
 
@@ -63,13 +59,16 @@ function normalizeJobState(state: unknown): NosanaJobState {
 
 export interface AnalysisJobPoster {
   postAnalysisJob(input: PostAnalysisJobInput): Promise<PostedJob>;
-  /** Poll a posted job's lifecycle state by its Nosana job address (M3.7). */
+  /** Poll a posted job's lifecycle state by its Nosana job address. */
   getJobState(jobId: string): Promise<NosanaJobState>;
+  /** Cancel a queued/running job by its Nosana job address, so we stop paying for
+   *  a run whose output is about to be discarded (user-initiated delete). */
+  stopJob(jobId: string): Promise<void>;
 }
 
 /**
- * Build a poster bound to one Nosana client. Wallet fallback (§8.2) would swap
- * the client construction here and leave the rest untouched.
+ * Build a poster bound to one Nosana client. A wallet fallback would swap the
+ * client construction here and leave the rest untouched.
  */
 export function createAnalysisJobPoster(
   config: NosanaConfig,
@@ -84,7 +83,7 @@ export function createAnalysisJobPoster(
       params: input.params,
     });
 
-    // Fail before spending Credits if the definition is malformed (§8.2).
+    // Fail before spending Credits if the definition is malformed.
     const validation = validateJobDefinition(definition);
     if (!validation.success) {
       throw new Error('Invalid Nosana job definition');
@@ -115,14 +114,17 @@ export function createAnalysisJobPoster(
       return normalizeJobState(job.state);
     } catch (err) {
       // A freshly-posted job isn't immediately retrievable — the Nosana API 404s
-      // until the on-chain job account is indexed (seen for ~1 min after post).
-      // Treat "not found" as not-yet-visible ('unknown') so the poller waits
-      // instead of erroring every tick; a job that never appears is still caught
-      // by the poller's per-attempt timeout budget (§8.3).
+      // until the on-chain job account is indexed (~1 min). Treat "not found" as
+      // not-yet-visible so the poller waits instead of erroring every tick; a job
+      // that never appears is still caught by the per-attempt timeout budget.
       if (isNotFound(err)) return 'unknown';
       throw err;
     }
   }
 
-  return { postAnalysisJob, getJobState };
+  async function stopJob(jobId: string): Promise<void> {
+    await client.api.jobs.stop(jobId);
+  }
+
+  return { postAnalysisJob, getJobState, stopJob };
 }

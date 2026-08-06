@@ -20,8 +20,7 @@ function opArgs(def: JobDefinition): { image: string; gpu: boolean; env: Record<
 function jobParams(def: JobDefinition): Record<string, unknown> {
   const encoded = opArgs(def).env.JOB_PARAMS;
   assert.ok(encoded, 'expected JOB_PARAMS');
-  // JOB_PARAMS is base64-encoded JSON (see buildEnv: Nosana mangles raw-JSON env
-  // values in transit to the container, so we encode to survive it).
+  // JOB_PARAMS is base64-encoded JSON (Nosana mangles raw-JSON env values).
   const raw = Buffer.from(encoded, 'base64').toString('utf-8');
   return JSON.parse(raw);
 }

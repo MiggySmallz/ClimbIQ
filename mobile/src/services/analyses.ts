@@ -1,7 +1,7 @@
-// Analysis history for the Analyze tab (spec §5/§6). Every clip the user has
-// sent for analysis, in-flight or finished, so leaving the status screen never
-// loses track of a run. Sourced from `analysis_jobs` (covers queued/running/
-// failed too, not just completed reports); RLS scopes rows to the video owner.
+// Analysis history for the Analyze tab. Every clip the user has sent for
+// analysis, in-flight or finished, so leaving the status screen never loses track
+// of a run. Sourced from `analysis_jobs` (covers queued/running/failed too, not
+// just completed reports); RLS scopes rows to the video owner.
 
 import type { JobStatus } from '@climbiq/shared';
 

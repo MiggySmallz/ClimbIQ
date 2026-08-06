@@ -1,24 +1,102 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
 
-import { AdminCard } from '@/components/admin-card';
 import { Avatar } from '@/components/avatar';
-import { ThemedText } from '@/components/themed-text';
+import { Screen, Txt } from '@/components/ui';
+import { gradeColor, gradeRank, radius } from '@/constants/design';
+import { useClimbs } from '@/hooks/use-climbs';
 import { usePendingRequestCount } from '@/hooks/use-pending-requests';
+import { useReportTrends } from '@/hooks/use-report-trends';
+import { useTheme } from '@/hooks/use-theme';
+import { totals } from '@/lib/climb-stats';
 import { useAuth } from '@/lib/auth-context';
 import { pickAvatarImage } from '@/lib/image';
 import { supabase } from '@/lib/supabase';
-import { deleteAccount } from '@/services/account';
 import { removeAvatarByUrl, updateProfile, uploadAvatar } from '@/services/profiles';
 
+function Row({
+  icon,
+  label,
+  onPress,
+  badge,
+  value,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+  badge?: number;
+  value?: string;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 13,
+        padding: 16,
+        borderRadius: radius.lg,
+        backgroundColor: theme.card,
+        borderWidth: 1,
+        borderColor: theme.line,
+        opacity: pressed ? 0.9 : 1,
+      })}>
+      <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: theme.chip, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={17} color={theme.ink} />
+      </View>
+      <Txt weight={700} size={16} style={{ flex: 1 }}>
+        {label}
+      </Txt>
+      {badge && badge > 0 ? (
+        <View style={{ minWidth: 24, height: 24, paddingHorizontal: 7, borderRadius: 12, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
+          <Txt font="mono" weight={700} size={13} color="#fff">
+            {badge > 9 ? '9+' : String(badge)}
+          </Txt>
+        </View>
+      ) : value ? (
+        <Txt font="mono" weight={700} size={13} color="ink3">
+          {value}
+        </Txt>
+      ) : null}
+      <Ionicons name="chevron-forward" size={18} color={theme.ink3} />
+    </Pressable>
+  );
+}
+
+function StatCell({ value, label, color }: { value: string | number; label: string; color?: string }) {
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Txt font="mono" weight={700} size={22} tracking={-0.7} color={color}>
+        {value}
+      </Txt>
+      <Txt weight={700} size={10} tracking={1} color="ink3">
+        {label}
+      </Txt>
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
-  const { session, profile, refreshProfile } = useAuth();
-  const pendingRequests = usePendingRequestCount();
-  const [busy, setBusy] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const theme = useTheme();
+  const { session, profile, isAdmin, refreshProfile } = useAuth();
+  const pending = usePendingRequestCount();
+  const climbsQ = useClimbs();
+  const trendsQ = useReportTrends();
+  const [signingOut, setSigningOut] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
+
+  const climbs = climbsQ.data ?? [];
+  const { sends } = totals(climbs);
+  const reportsCount = trendsQ.data?.length ?? 0;
+  const best = climbs
+    .filter((c) => c.sent && c.grade)
+    .reduce<string | null>((acc, c) => {
+      if (!acc) return c.grade;
+      return (gradeRank(c.grade) ?? -1) > (gradeRank(acc) ?? -1) ? c.grade : acc;
+    }, null);
 
   async function handleChangeAvatar() {
     if (!session || avatarBusy) return;
@@ -39,137 +117,79 @@ export default function ProfileScreen() {
   }
 
   async function handleSignOut() {
-    setBusy(true);
+    setSigningOut(true);
     try {
       const { error } = await supabase.auth.signOut();
       if (error) Alert.alert('Sign out failed', error.message);
     } finally {
-      setBusy(false);
+      setSigningOut(false);
     }
-  }
-
-  async function runDelete() {
-    setDeleting(true);
-    try {
-      await deleteAccount();
-      // Session is now invalid server-side; clear it locally → redirect to sign-in.
-      await supabase.auth.signOut();
-    } catch {
-      setDeleting(false);
-      Alert.alert('Delete failed', 'Could not delete your account. Please try again.');
-    }
-  }
-
-  function handleDeleteAccount() {
-    Alert.alert(
-      'Delete account?',
-      'This permanently deletes your account, climbs, analyses, and videos. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => void runDelete() },
-      ],
-    );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      <Pressable onPress={handleChangeAvatar} style={styles.avatarWrap}>
-        {avatarBusy ? (
-          <View style={styles.avatarBusy}>
-            <ActivityIndicator />
+    <Screen edges={['top']}>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 24, gap: 18, flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+        {/* Identity */}
+        <View style={{ alignItems: 'center', gap: 12, paddingVertical: 6 }}>
+          <Pressable onPress={handleChangeAvatar} style={{ width: 96, height: 96 }}>
+            {avatarBusy ? (
+              <View style={{ width: 96, height: 96, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator />
+              </View>
+            ) : (
+              <Avatar url={profile?.avatar_url ?? null} username={profile?.username} size={96} tint={theme.accent} />
+            )}
+            <View style={{ position: 'absolute', right: -2, bottom: -2, width: 32, height: 32, borderRadius: 16, backgroundColor: theme.ink, borderWidth: 3, borderColor: theme.bg, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="pencil" size={13} color={theme.bg} />
+            </View>
+          </Pressable>
+          <View style={{ alignItems: 'center', gap: 3 }}>
+            <Txt weight={700} size={26} tracking={-0.8}>
+              @{profile?.username}
+            </Txt>
+            <Txt font="mono" weight={600} size={13} color="ink2">
+              {session?.user.email}
+            </Txt>
           </View>
-        ) : (
-          <Avatar url={profile?.avatar_url ?? null} username={profile?.username} size={96} />
-        )}
-        <ThemedText type="small" themeColor="textSecondary">
-          {profile?.avatar_url ? 'Change photo' : 'Add photo'}
-        </ThemedText>
-      </Pressable>
-
-      <ThemedText style={styles.username}>@{profile?.username}</ThemedText>
-      <ThemedText themeColor="textSecondary" style={styles.email}>
-        {session?.user.email}
-      </ThemedText>
-
-      <Pressable style={styles.friendsButton} onPress={() => router.push('/friends')}>
-        <Ionicons name="people-outline" size={20} color="#208AEF" />
-        <Text style={styles.friendsText}>Friends</Text>
-        {pendingRequests > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{pendingRequests}</Text>
+          <View style={{ flexDirection: 'row', gap: 22, paddingVertical: 14, paddingHorizontal: 22, borderRadius: radius.lg, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.line }}>
+            <StatCell value={sends} label="SENDS" />
+            <View style={{ width: 1, backgroundColor: theme.line }} />
+            <StatCell value={reportsCount} label="REPORTS" />
+            <View style={{ width: 1, backgroundColor: theme.line }} />
+            <StatCell value={best ?? '—'} label="BEST" color={best ? gradeColor(best) : undefined} />
           </View>
-        )}
-      </Pressable>
+        </View>
 
-      {__DEV__ && (
-        // Dev-only: opens the report screen against the bundled sample report so
-        // M4 can be verified on device before the analyze/upload flow (M3) lands.
+        {/* Rows */}
+        <View style={{ gap: 10 }}>
+          <Row icon="people-outline" label="Friends" onPress={() => router.push('/friends')} badge={pending} />
+          <Row icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />
+          {isAdmin ? (
+            <>
+              <Row icon="server-outline" label="GPU credits" onPress={() => router.push('/admin/credits')} value="ADMIN" />
+              <Row icon="stats-chart-outline" label="Usage & cost" onPress={() => router.push('/admin/usage')} value="ADMIN" />
+            </>
+          ) : null}
+          {__DEV__ ? (
+            <Row icon="flask-outline" label="View sample report" onPress={() => router.push({ pathname: '/report/[id]', params: { id: 'sample' } })} />
+          ) : null}
+        </View>
+
+        <View style={{ flex: 1 }} />
+
         <Pressable
-          style={styles.friendsButton}
-          onPress={() => router.push({ pathname: '/report/[id]', params: { id: 'sample' } })}>
-          <Ionicons name="flask-outline" size={20} color="#208AEF" />
-          <Text style={styles.friendsText}>View sample report</Text>
+          onPress={handleSignOut}
+          disabled={signingOut}
+          style={{ padding: 17, borderRadius: radius.lg, borderWidth: 1, borderColor: theme.line, backgroundColor: theme.card, alignItems: 'center' }}>
+          {signingOut ? (
+            <ActivityIndicator color={theme.bad} />
+          ) : (
+            <Txt weight={700} size={15} color="bad">
+              Sign out
+            </Txt>
+          )}
         </Pressable>
-      )}
-
-      {/* Owner-only: hidden for everyone whose /admin/usage call 404s (M6.3). */}
-      <AdminCard />
-
-      <Pressable style={styles.signOutButton} onPress={handleSignOut} disabled={busy || deleting}>
-        {busy ? <ActivityIndicator /> : <Text style={styles.signOutText}>Sign out</Text>}
-      </Pressable>
-
-      <Pressable
-        style={styles.deleteButton}
-        onPress={handleDeleteAccount}
-        disabled={busy || deleting}>
-        {deleting ? (
-          <ActivityIndicator color="#E5484D" />
-        ) : (
-          <Text style={styles.deleteText}>Delete account</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+      </ScrollView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flexGrow: 1, alignItems: 'center', paddingTop: 48, padding: 24, gap: 8 },
-  avatarWrap: { alignItems: 'center', gap: 8, marginBottom: 8 },
-  avatarBusy: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
-  username: { fontSize: 24, lineHeight: 30, fontWeight: '700' },
-  email: { fontSize: 15 },
-  friendsButton: {
-    marginTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#208AEF',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-  },
-  friendsText: { color: '#208AEF', fontSize: 16, fontWeight: '600' },
-  badge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#E5484D',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  signOutButton: {
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#E5484D',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-  },
-  signOutText: { color: '#E5484D', fontSize: 16, fontWeight: '600' },
-  deleteButton: { marginTop: 'auto', paddingVertical: 12, paddingHorizontal: 32 },
-  deleteText: { color: '#E5484D', fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
-});

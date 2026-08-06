@@ -1,8 +1,3 @@
-// Analysis history (spec §6, M4.x). Initial fetch via TanStack Query, kept fresh
-// by a Supabase realtime subscription on `analysis_jobs` so the list reflects a
-// run's queued → posted → running → done/error progression without a manual
-// refresh. RLS scopes the stream to the user's own rows.
-
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 

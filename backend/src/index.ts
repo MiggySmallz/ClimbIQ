@@ -6,8 +6,7 @@ import { startRetentionSweep } from './retention.js';
 import { buildServer } from './server.js';
 
 // Surface the Nosana job-posting config at boot so the market/node in effect is
-// visible without reading .env — mirrors the poller's self-guard (loadNosanaConfig
-// throws when NOSANA_* aren't set yet).
+// visible without reading .env.
 function logNosanaConfig(app: FastifyInstance): void {
   try {
     const nosana = loadNosanaConfig();
@@ -36,10 +35,9 @@ const app = await buildServer(config);
 try {
   await app.listen({ port: config.port, host: '0.0.0.0' });
   logNosanaConfig(app);
-  // Poll posted jobs → ingest reports (§7.2). Self-guards when Nosana isn't
-  // configured yet, so it's safe to always start.
+  // Poll posted jobs → ingest reports. Self-guards when Nosana isn't configured.
   startPoller(app);
-  // Delete expired raw videos from R2 daily (§11.8, M6.1).
+  // Delete expired raw videos from R2 daily.
   startRetentionSweep(app);
 } catch (err) {
   app.log.error(err);

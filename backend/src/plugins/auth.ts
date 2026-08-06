@@ -13,9 +13,9 @@ declare module 'fastify' {
 }
 
 /**
- * Supabase JWT verification on every route (spec §7.2). Tokens are verified
- * against the Auth server via getUser() — robust to signing-key rotation; swap
- * for local JWKS verification if per-request latency ever matters at scale.
+ * Supabase JWT verification on every route. Tokens are verified against the Auth
+ * server via getUser() — robust to signing-key rotation; swap for local JWKS
+ * verification if per-request latency ever matters at scale.
  */
 export default fp<{ supabase: SupabaseClient }>(async (app, opts) => {
   app.decorateRequest('userId', '');

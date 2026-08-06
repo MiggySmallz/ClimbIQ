@@ -1,7 +1,6 @@
-// Push notifications on terminal job transitions (spec §7.2, §8.3, M3.10). The
-// poller calls these when a job reaches done or a user-visible failure; each
-// sends an Expo push to every device the recipient has registered (M3.9/M3.17)
-// and prunes tokens Expo reports as unregistered.
+// Push notifications on terminal job transitions. The poller calls these when a
+// job reaches done or a user-visible failure; each sends an Expo push to every
+// device the recipient has registered and prunes tokens Expo reports as dead.
 
 import type { PushData } from '@climbiq/shared';
 import type { FastifyInstance } from 'fastify';
@@ -80,7 +79,7 @@ export async function notifyJobDone(
   });
 }
 
-/** Analysis failed/timed out after retries — user-visible failure (§8.3). */
+/** Analysis failed/timed out after retries — user-visible failure. */
 export async function notifyJobFailed(
   app: FastifyInstance,
   job: NotifiableJob,

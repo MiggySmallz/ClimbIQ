@@ -43,9 +43,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "ClimbIQ uses your photos to set a profile picture and import climbing videos.",
-          "cameraPermission": false,
-          "microphonePermission": false
+          "photosPermission": "ClimbIQ uses your photos to set a profile picture and import climbing videos."
         }
       ],
       [

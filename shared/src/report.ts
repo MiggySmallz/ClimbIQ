@@ -1,8 +1,7 @@
-// The analysis job's `result.json` contract (spec §10) and its structured
-// error-JSON counterpart (spec §8.1). `report.schema.json` / `error.schema.json`
-// mirror these types exactly — the JSON Schema files are what the Python
-// container and the orchestrator both validate against; keep all three in sync
-// by hand (contract changes are additive-only per spec §10).
+// The analysis job's `result.json` contract and its structured error-JSON
+// counterpart. `report.schema.json` / `error.schema.json` mirror these types
+// exactly — the JSON Schema files are what the Python container and the
+// orchestrator validate against; keep all three in sync by hand (additive-only).
 
 import type { IssueKey, PositiveKey } from './reportKeys.js';
 
@@ -42,9 +41,9 @@ export interface Pipeline {
   duration_s: number;
 }
 
-/** `result.json` — written to `reports/{report_id}/result.json`, spec §10. */
+/** `result.json` — written to `reports/{report_id}/result.json`. */
 export interface AnalysisReport {
-  /** Bump only for breaking shape changes; unknown versions get a client fallback (spec §10). */
+  /** Bump only for breaking shape changes; unknown versions get a client fallback. */
   version: 1;
   video_id: string;
   observations: Observation[];
@@ -59,10 +58,9 @@ export interface AnalysisReport {
 
 /**
  * `timeline.json` — the per-frame biomechanics series for the report screen's
- * chart, stored in R2 (spec §10 note: heavy per-frame data never goes in the
- * Postgres report row). Values are body-scale-normalized (torso lengths) so a
- * chart is comparable across videos; `null` = not measurable that frame.
- * Produced by `nosana/analysis-job/src/timeline.py` — keep in sync.
+ * chart, stored in R2 (never in the Postgres report row). Values are
+ * body-scale-normalized (torso lengths) so a chart is comparable across videos;
+ * `null` = not measurable that frame. Produced by timeline.py — keep in sync.
  */
 export interface TimelineSeries {
   /** Sample timestamps (seconds), one per analyzed frame. */
@@ -83,7 +81,7 @@ export interface Timeline {
   series: TimelineSeries;
 }
 
-/** Which pipeline stage failed (spec §8.1: "any failure: PUT a structured error JSON"). */
+/** Which pipeline stage failed. */
 export type AnalysisErrorStage =
   | 'download'
   | 'pose'
@@ -94,9 +92,8 @@ export type AnalysisErrorStage =
   | 'unknown';
 
 /**
- * Structured error JSON PUT to `RESULT_PUT_URL` on failure, in place of a
- * report. `message` is for orchestrator logs only — never forwarded verbatim
- * to the client (spec §3: never leak internal errors).
+ * Structured error JSON PUT to `RESULT_PUT_URL` on failure, in place of a report.
+ * `message` is for orchestrator logs only — never forwarded verbatim to the client.
  */
 export interface AnalysisErrorResult {
   version: 1;

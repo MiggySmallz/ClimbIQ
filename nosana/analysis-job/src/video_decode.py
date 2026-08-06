@@ -1,6 +1,6 @@
-# Streaming frame sampler (spec §3, §8.1): decode sampled frames one at a
-# time at ~sample_fps — never the whole video into RAM. grab() skips the
-# decode work for non-sampled frames.
+# Streaming frame sampler: decode sampled frames one at a time at ~sample_fps —
+# never the whole video into RAM. grab() skips the decode work for non-sampled
+# frames.
 from collections.abc import Iterator
 from pathlib import Path
 

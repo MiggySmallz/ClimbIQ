@@ -11,6 +11,7 @@ npm-debug.log*
 yarn-error.log*
 dist/
 build/
+*.tsbuildinfo
 
 # Expo / React Native
 .expo/
@@ -65,4 +66,4 @@ google-services.json
 /ios
 /android
 
-todo.md
+/dev_docs

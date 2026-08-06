@@ -1,16 +1,13 @@
-// Cloudflare R2 presigned-URL client (spec §8.2 security, §9 key layout).
+// Cloudflare R2 presigned-URL client. R2 speaks the S3 API, so we use the AWS SDK
+// v3 S3 client + presigner against R2's account-scoped endpoint (region "auto").
+// The orchestrator never proxies bytes: the phone PUTs its clip straight to R2,
+// the Nosana job GETs the video and PUTs its artifacts, the report screen GETs
+// them — all via short-lived presigned URLs issued here.
 //
-// R2 speaks the S3 API, so we use the AWS SDK v3 S3 client + presigner against
-// R2's account-scoped endpoint with region "auto". The orchestrator never proxies
-// bytes: the phone PUTs its clip straight to R2, the Nosana job GETs the video and
-// PUTs its three artifacts, and the report screen GETs the artifacts — all via
-// short-lived presigned URLs issued here.
-//
-// SECURITY (spec §8.2): job-facing URLs live in a public-IPFS job definition, so
-// every URL is (1) scoped to a single object by construction and (2) capped at
-// ≤1 h expiry (MAX_PRESIGN_SECONDS). For uploads where the byte count is known up
-// front (the phone knows its compressed clip size), we additionally sign
-// Content-Length so a leaked URL can't be used to upload a larger object.
+// SECURITY: job-facing URLs live in a public-IPFS job definition, so every URL is
+// scoped to a single object and capped at ≤1 h expiry (MAX_PRESIGN_SECONDS). When
+// the byte count is known up front (the phone upload) we also sign Content-Length
+// so a leaked URL can't upload a larger object.
 
 import {
   DeleteObjectCommand,
@@ -28,7 +25,7 @@ type PresignOptions = NonNullable<Parameters<typeof getSignedUrl>[2]>;
 
 import type { Config } from '../config.js';
 
-/** Hard cap on any presigned-URL lifetime (spec §8.2: ≤1 h on job-facing URLs). */
+/** Hard cap on any presigned-URL lifetime (≤1 h on job-facing URLs). */
 export const MAX_PRESIGN_SECONDS = 3600;
 
 /** Build an S3 client pointed at the account's R2 endpoint. */
@@ -36,16 +33,14 @@ export function createR2Client(config: Config): S3Client {
   return new S3Client({
     region: 'auto',
     endpoint: `https://${config.r2AccountId}.r2.cloudflarestorage.com`,
-    // Path-style (endpoint/<bucket>/<key>), NOT virtual-hosted
-    // (<bucket>.endpoint/<key>). R2's TLS cert is a single-level wildcard
+    // Path-style, NOT virtual-hosted. R2's TLS cert is a single-level wildcard
     // (*.r2.cloudflarestorage.com), so a <bucket>.<account>.r2… host fails the
     // TLS handshake on strict clients (e.g. the mobile app's BoringSSL).
     forcePathStyle: true,
-    // AWS SDK v3 (≥3.729) adds a default CRC32 request checksum to PutObject.
-    // That makes the presigned PUT require an x-amz-checksum-crc32 header the
-    // uploading client (phone / job container) never sends, so R2 rejects it
-    // with 403 AccessDenied. WHEN_REQUIRED restores the older behavior: only
-    // checksum when the operation actually mandates it (spec §8.2 upload path).
+    // AWS SDK v3 (≥3.729) adds a default CRC32 request checksum to PutObject,
+    // making the presigned PUT require an x-amz-checksum-crc32 header the
+    // uploading client never sends (R2 then 403s). WHEN_REQUIRED restores the
+    // older behavior: checksum only when the operation mandates it.
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
     credentials: {
@@ -55,8 +50,8 @@ export function createR2Client(config: Config): S3Client {
   });
 }
 
-// --- Key layout (spec §9) -------------------------------------------------
-// videos/{user_id}/{video_id}.mp4         (expiring — retention sweep, M6.1)
+// --- Key layout -----------------------------------------------------------
+// videos/{user_id}/{video_id}.mp4         (expiring — retention sweep)
 // reports/{report_id}/overlay.mp4         (permanent)
 // reports/{report_id}/timeline.json       (permanent)
 // reports/{report_id}/result.json         (permanent)
@@ -67,7 +62,7 @@ export function videoKey(userId: string, videoId: string): string {
 }
 
 /** Report artifact keys. `reportId` is pre-allocated at job-post time so the
- *  job can PUT to the final location before the reports row exists (M3.5/M3.7). */
+ *  job can PUT to the final location before the reports row exists. */
 export function reportResultKey(reportId: string): string {
   return `reports/${reportId}/result.json`;
 }
@@ -78,7 +73,7 @@ export function reportTimelineKey(reportId: string): string {
   return `reports/${reportId}/timeline.json`;
 }
 
-/** Clamp any requested lifetime into (0, MAX_PRESIGN_SECONDS] (spec §8.2). */
+/** Clamp any requested lifetime into (0, MAX_PRESIGN_SECONDS]. */
 function clampExpiry(seconds: number): number {
   if (!Number.isFinite(seconds) || seconds <= 0) return MAX_PRESIGN_SECONDS;
   return Math.min(Math.floor(seconds), MAX_PRESIGN_SECONDS);
@@ -88,10 +83,9 @@ export interface PresignPutInput {
   key: string;
   /**
    * Exact byte count to sign into the URL. Provide it whenever the size is known
-   * (the phone upload knows its compressed clip size, M3.4) so the URL can't be
-   * used to upload a larger object. Omit it for container-generated artifacts,
-   * whose size isn't known when the job is posted — those rely on the single-
-   * object scope + short expiry instead (spec §8.2).
+   * (the phone upload) so the URL can't upload a larger object. Omit it for
+   * container-generated artifacts, whose size isn't known at post time — those
+   * rely on single-object scope + short expiry instead.
    */
   contentLength?: number;
   contentType?: string;
@@ -124,7 +118,7 @@ export function presignPut(
 }
 
 /** HEAD an object; returns its byte size, or null if it doesn't exist. Used to
- *  confirm an upload actually landed before posting a job (M3.5). */
+ *  confirm an upload actually landed before posting a job. */
 export async function headObject(
   client: S3Client,
   bucket: string,
@@ -142,8 +136,8 @@ export async function headObject(
   }
 }
 
-/** Download an object's body as text (server-side; the orchestrator has creds,
- *  so no presign needed). Used by the poller to read result.json (M3.7). */
+/** Download an object's body as text (server-side, no presign needed). Used by
+ *  the poller to read result.json. */
 export async function getObjectText(
   client: S3Client,
   bucket: string,
@@ -155,13 +149,13 @@ export async function getObjectText(
 }
 
 /** Delete a single object. Idempotent — S3/R2 returns success for a missing key,
- *  so the retention sweep (M6.1) can safely re-run. */
+ *  so the retention sweep can safely re-run. */
 export async function deleteObject(client: S3Client, bucket: string, key: string): Promise<void> {
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
 /** All object keys under a prefix (paginated). Used by account deletion to sweep
- *  everything a user owns, including any orphans not tracked in Postgres (M6.4). */
+ *  everything a user owns, including orphans not tracked in Postgres. */
 export async function listObjectKeys(
   client: S3Client,
   bucket: string,
@@ -180,7 +174,7 @@ export async function listObjectKeys(
 }
 
 /** Delete many objects (chunked to the S3 1000-key-per-request limit). No-op on
- *  an empty list. Idempotent, like deleteObject (M6.4 account deletion). */
+ *  an empty list. Idempotent, like deleteObject. */
 export async function deleteObjects(
   client: S3Client,
   bucket: string,

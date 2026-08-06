@@ -1,7 +1,6 @@
-# Scores + grade estimate (spec §8.1, §14.1): transparent heuristic from
-# issue counts/severities — labeled "beta" in the UI. Grip is weighted least
-# in the overall score (owner decision 2026-07-13: hand features are
-# secondary and their detection is the least reliable).
+# Scores + grade estimate: transparent heuristic from issue counts/severities —
+# labeled "beta" in the UI. Grip is weighted least in the overall score (hand
+# features are secondary and their detection is the least reliable).
 from features import ClimbFeatures
 from rules import RuleResult
 
@@ -40,8 +39,8 @@ def compute_scores(result: RuleResult) -> dict[str, int]:
 
 
 def estimate_grade(climb: ClimbFeatures, declared_grade: str | None) -> str | None:
-    """v1: route grade is not derivable from technique features alone (a V0
-    climbed sloppily is still a V0), so the heuristic anchors on the climber's
-    declared grade when given and otherwise abstains — the LLM stage (M2.15)
-    may refine from what it sees. Calibration is spec §14.1's open question."""
+    """v1: route grade isn't derivable from technique features alone (a V0
+    climbed sloppily is still a V0), so the heuristic anchors on the declared
+    grade when given and otherwise abstains — the LLM stage may refine from what
+    it sees."""
     return declared_grade

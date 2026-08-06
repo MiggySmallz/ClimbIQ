@@ -1,14 +1,12 @@
-# Feature extraction from smoothed 2D keypoints (spec §8.1). Ground rules
-# (spec §3): every threshold is normalized to body scale (torso length in px),
-# never absolute pixels; baselines come from percentiles over a time window,
-# never a single frame. Image coordinates are y-down; "height" below means
-# -y so bigger = higher, which keeps the hip-drop math readable.
+# Feature extraction from smoothed 2D keypoints. Ground rules: every threshold is
+# normalized to body scale (torso length in px), never absolute pixels; baselines
+# come from percentiles over a time window, never a single frame. Image
+# coordinates are y-down; "height" below means -y so bigger = higher.
 #
-# Owner decision 2026-07-13: hand/finger features are secondary. 2D finger
-# tracking on climbing footage (chalk, occlusion by holds, motion blur) is too
-# unreliable to lead coaching, so grip/crimp classification is gated behind
-# HAND_CONF_MIN and only ever reported when confident; body-level features
-# (hips, elbows, feet) carry the analysis.
+# Hand/finger features are secondary: 2D finger tracking on climbing footage
+# (chalk, occlusion, motion blur) is too unreliable to lead coaching, so
+# grip/crimp classification is gated behind HAND_CONF_MIN and only reported when
+# confident; body-level features (hips, elbows, feet) carry the analysis.
 from dataclasses import dataclass
 
 import numpy as np
@@ -34,7 +32,7 @@ L_HAND_BASE, R_HAND_BASE = 91, 112  # each hand: wrist + 4 kpts per finger (thum
 # its joint naming differs and it contributes little to grip class.
 _FINGERS = [(5, 6, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16), (17, 18, 19, 20)]
 
-# --- classification thresholds (beta — tune against real footage in M2.19) ---
+# --- classification thresholds (beta — tune against real footage) ---
 ELBOW_STRAIGHT_DEG = 150.0   # above ⇒ straight-arm hang
 PIP_CRIMP_FLEX_DEG = 120.0   # mean PIP angle below ⇒ fingers strongly flexed (crimp-like)
 PIP_OPEN_DEG = 150.0         # mean PIP angle above ⇒ open-hand / drag
@@ -68,7 +66,7 @@ class FrameFeatures:
 class ClimbFeatures:
     frames: list[FrameFeatures]
     # 90th-percentile hip height over the first 2 s of detected climbing,
-    # normalized by median torso length (spec §8.1: never frame 0).
+    # normalized by median torso length (never frame 0).
     hip_baseline: float
     median_torso: float
 
@@ -205,8 +203,8 @@ def extract_features(pose_frames: list[PoseFrame]) -> ClimbFeatures:
     torsos = np.array([f.torso_len for f in frames if f.torso_len is not None])
     median_torso = float(np.median(torsos))
 
-    # Baseline window: first 2 s of *detected climbing* (spec §8.1) — measured
-    # from the first detected frame, never frame 0 of the video.
+    # Baseline window: first 2 s of *detected climbing* — measured from the first
+    # detected frame, never frame 0 of the video.
     t0 = with_hip[0].t_s
     window = [f for f in with_hip if f.t_s <= t0 + 2.0] or with_hip[:3]
     hip_baseline = float(np.percentile([f.hip_height for f in window], 90))

@@ -1,10 +1,8 @@
-# Rule-based issue detection (spec §8.1, §3): rules decide *what* was
-# detected — the LLM only verifies against keyframes and enriches. Every
-# threshold is body-scale-normalized (torso lengths) and named here so M2.19
-# tuning touches constants, not logic.
-#
-# Ranking honors the owner's 2026-07-13 decision: hand-derived issues
-# (full_crimp_risk) sort below body-level issues at equal severity.
+# Rule-based issue detection: rules decide *what* was detected — the LLM only
+# verifies against keyframes and enriches. Every threshold is body-scale-
+# normalized (torso lengths) and named here so tuning touches constants, not
+# logic. Ranking: hand-derived issues (full_crimp_risk) sort below body-level
+# issues at equal severity.
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -17,7 +15,7 @@ BARN_WINDOW_S = 2.0
 BARN_EXCURSION_TORSOS = 0.35
 BARN_RETURN_TORSOS = 0.15
 
-# --- hip-drop vs the 2 s-window baseline (spec §8.1)
+# --- hip-drop vs the 2 s-window baseline
 HIP_DROP_TORSOS = 0.3
 
 # --- bent-arm static hang
@@ -43,7 +41,7 @@ MIN_RUN_FRAMES = 2
 SEVERITY_HIGH_RATIO = 0.25
 SEVERITY_MEDIUM_RATIO = 0.10
 
-# Rule-authored fallback drills — the LLM refines these in M2.15; reports stay
+# Rule-authored fallback drills — the LLM refines these; reports stay
 # contract-valid even if its structured output fails to parse.
 DEFAULT_DRILLS = {
     'barn_door': 'Practice flagging: on steep problems, extend the free leg to counter-balance before each reach.',

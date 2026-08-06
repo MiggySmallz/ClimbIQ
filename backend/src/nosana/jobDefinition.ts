@@ -1,15 +1,12 @@
-// Nosana analysis job definition (spec §8.1 entrypoint contract, §8.2 posting).
+// Nosana analysis job definition builder. Pure, no SDK/secret dependency, so it's
+// unit-testable. Output is a Nosana `JobDefinition`: one `container/run` op on a
+// GPU node whose `env` carries the container entrypoint contract — four presigned
+// artifact URLs + a base64 JOB_PARAMS blob (keys must match job_env.py).
 //
-// Pure builder, no SDK/secret dependency, so it's unit-testable in isolation.
-// The output is a Nosana `JobDefinition`: one `container/run` op on a GPU node
-// whose `env` carries exactly the container entrypoint contract — the four
-// presigned artifact URLs + a base64-encoded JOB_PARAMS blob (keys must match
-// `nosana/analysis-job/src/job_env.py`; see buildEnv for why it's base64).
-//
-// SECURITY (spec §8.2): standard job definitions are pinned to public IPFS, so
-// everything in `env` is world-readable. Only ever put single-object presigned
-// URLs (≤1 h expiry) and non-secret params here — NEVER R2 account keys or
-// Supabase secrets. `assertNoSecretsInEnv` is a belt-and-braces guard.
+// SECURITY: job definitions are pinned to public IPFS, so everything in `env` is
+// world-readable. Only ever put single-object presigned URLs (≤1 h expiry) and
+// non-secret params here — NEVER R2 or Supabase secrets. `assertNoSecretsInEnv`
+// is a belt-and-braces guard.
 
 import type { JobDefinition } from '@nosana/kit';
 
@@ -59,13 +56,9 @@ function buildEnv(input: BuildAnalysisJobInput): Record<string, string> {
     RESULT_PUT_URL: urls.resultPutUrl,
     OVERLAY_PUT_URL: urls.overlayPutUrl,
     TIMELINE_PUT_URL: urls.timelinePutUrl,
-    // Base64, NOT raw JSON. A raw `{...}` value is valid JSON, and Nosana's
-    // node mangles a JSON-object-looking env value in transit to the container
-    // (observed: the container's `json.loads(JOB_PARAMS)` fails at char 1 while
-    // the pinned IPFS definition is correct). base64 output is [A-Za-z0-9+/=]
-    // only — nothing any launch-layer will parse or a shell will expand — so it
-    // survives intact. The plain presigned URLs aren't JSON, so they pass fine.
-    // Decoded by `load_job_env()` in nosana/analysis-job/src/job_env.py.
+    // Base64, NOT raw JSON: Nosana's node mangles a JSON-object-looking env value
+    // in transit to the container (the container's `json.loads` then fails), while
+    // base64's [A-Za-z0-9+/=] survives intact. Decoded by `load_job_env()`.
     JOB_PARAMS: Buffer.from(JSON.stringify(params), 'utf-8').toString('base64'),
   };
 }

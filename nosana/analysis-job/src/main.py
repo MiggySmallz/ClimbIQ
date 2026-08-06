@@ -1,6 +1,6 @@
-# Job entrypoint (spec §8.1): read the env-var contract, run the pipeline,
-# PUT the three artifacts, exit 0. On any failure: PUT the structured error
-# JSON (shared/src/error.schema.json) to RESULT_PUT_URL and exit non-zero.
+# Job entrypoint: read the env-var contract, run the pipeline, PUT the three
+# artifacts, exit 0. On any failure: PUT the structured error JSON to
+# RESULT_PUT_URL and exit non-zero.
 import json
 import os
 import sys
@@ -105,9 +105,9 @@ def run_pipeline(env: JobEnv, work_dir: Path) -> None:
         )
 
     # LLM verification + coaching. The pose ONNX sessions were freed when
-    # run_pose_stage's engine went out of scope, so the 3090/4090 VRAM budget
-    # (spec §8.1) belongs to Qwen here. SKIP_LLM=1 is local-dev only: it keeps
-    # the rest of the pipeline testable without the 17 GB model.
+    # run_pose_stage's engine went out of scope, so the VRAM budget belongs to
+    # Qwen here. SKIP_LLM=1 is local-dev only: it keeps the rest of the pipeline
+    # testable without the 17 GB model.
     if os.environ.get('SKIP_LLM') == '1':
         from llm import CoachingOutput
         coaching = CoachingOutput(

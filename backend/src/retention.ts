@@ -1,18 +1,14 @@
-// Retention sweep (spec §7.2, §11.8, M6.1). Raw uploaded videos expire 30 days
-// after creation; report artifacts are permanent and never touched here. Once a
-// day (and once at startup) this deletes the R2 originals whose `expires_at` has
-// passed and flips the row to `expired`.
-//
-// Single-instance safe: the delete is idempotent (deleting a missing key is a
-// no-op) and the status flip is filtered on the pre-sweep status, so a repeated
-// or overlapping run does no harm.
+// Retention sweep. Raw uploaded videos expire 30 days after creation; report
+// artifacts are permanent and never touched here. Once a day (and once at
+// startup) this deletes the R2 originals whose `expires_at` has passed and flips
+// the row to `expired`. Single-instance safe: the delete is idempotent and the
+// status flip is filtered on the pre-sweep status.
 
 import { deleteObject } from './r2/client.js';
 import type { FastifyInstance } from 'fastify';
 
 const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
-// Bound each pass so a large backlog is chipped away over several runs rather
-// than held in one long transaction.
+// Bound each pass so a large backlog is chipped away over several runs.
 const SWEEP_BATCH = 200;
 
 interface ExpiringVideo {

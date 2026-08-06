@@ -28,7 +28,7 @@ const config: Config = {
 
 const client = createR2Client(config);
 
-test('key builders follow the §9 R2 layout', () => {
+test('key builders follow the R2 layout', () => {
   assert.equal(videoKey('user-1', 'vid-1'), 'videos/user-1/vid-1.mp4');
   assert.equal(reportResultKey('rep-1'), 'reports/rep-1/result.json');
   assert.equal(reportOverlayKey('rep-1'), 'reports/rep-1/overlay.mp4');
@@ -44,7 +44,7 @@ test('presigned URLs are path-style on the account endpoint (R2 TLS cert)', asyn
   assert.ok(url.searchParams.get('X-Amz-Signature'));
 });
 
-test('expiry is clamped to ≤1 h (spec §8.2)', async () => {
+test('expiry is clamped to ≤1 h', async () => {
   const url = new URL(
     await presignGet(client, config.r2Bucket, reportResultKey('r'), 24 * 3600),
   );

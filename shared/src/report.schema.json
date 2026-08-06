@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://climbiq.app/schema/report.schema.json",
   "title": "AnalysisReport",
-  "description": "result.json contract, spec §10. Mirrors shared/src/report.ts — keep in sync.",
+  "description": "result.json contract. Mirrors shared/src/report.ts — keep in sync.",
   "type": "object",
   "additionalProperties": false,
   "required": [

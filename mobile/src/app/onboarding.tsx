@@ -1,24 +1,45 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect } from 'expo-router';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
 
-import { authStyles as s } from '@/components/auth-styles';
 import { Avatar } from '@/components/avatar';
-import { ThemedText } from '@/components/themed-text';
+import { Button, Card, Screen, Txt } from '@/components/ui';
+import { family } from '@/constants/fonts';
+import { radius } from '@/constants/design';
+import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth-context';
 import { pickAvatarImage } from '@/lib/image';
 import { createProfile, updateProfile, uploadAvatar, USERNAME_PATTERN } from '@/services/profiles';
 
+function Rule({ ok, neutral, label }: { ok: boolean; neutral?: boolean; label: string }) {
+  const theme = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+      {neutral ? (
+        <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: theme.ink3 }} />
+      ) : (
+        <View
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: 8,
+            backgroundColor: ok ? theme.good : theme.chip,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+          {ok ? <Ionicons name="checkmark" size={11} color="#fff" /> : null}
+        </View>
+      )}
+      <Txt weight={600} size={13} color={ok || neutral ? 'ink2' : 'ink3'}>
+        {label}
+      </Txt>
+    </View>
+  );
+}
+
 export default function OnboardingScreen() {
+  const theme = useTheme();
   const { session, profile, refreshProfile } = useAuth();
   const [username, setUsername] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -26,6 +47,11 @@ export default function OnboardingScreen() {
 
   if (!session) return <Redirect href="/sign-in" />;
   if (profile) return <Redirect href="/" />;
+
+  const name = username.trim();
+  const validChars = /^[a-zA-Z0-9_]*$/.test(name) && name.length > 0;
+  const validLength = name.length >= 3 && name.length <= 20;
+  const valid = USERNAME_PATTERN.test(name);
 
   async function handlePickAvatar() {
     try {
@@ -38,8 +64,7 @@ export default function OnboardingScreen() {
 
   async function handleSubmit() {
     if (!session) return;
-    const name = username.trim();
-    if (!USERNAME_PATTERN.test(name)) {
+    if (!valid) {
       Alert.alert('Username', '3–20 characters: letters, numbers, underscores.');
       return;
     }
@@ -70,36 +95,130 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={s.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ThemedText style={s.title}>Pick a username</ThemedText>
-      <ThemedText themeColor="textSecondary" style={s.subtitle}>
-        This is how friends will find you
-      </ThemedText>
+    <Screen padded={26} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, paddingTop: 28 }}>
+          {/* progress dots */}
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: theme.accent }} />
+            <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: theme.line }} />
+          </View>
 
-      <View style={{ alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <Pressable onPress={handlePickAvatar} disabled={busy}>
-          <Avatar url={avatarUri} username={username} size={96} />
-        </Pressable>
-        <ThemedText type="small" themeColor="textSecondary">
-          {avatarUri ? 'Tap to change photo' : 'Add a photo (optional)'}
-        </ThemedText>
-      </View>
+          <Txt weight={700} size={40} lh={40} tracking={-1.8} style={{ marginTop: 36 }}>
+            Pick a handle.
+          </Txt>
+          <Txt weight={500} size={15} lh={22} color="ink2" style={{ marginTop: 10, marginBottom: 28 }}>
+            Friends find you by username. 3–20 characters, letters, numbers, underscores.
+          </Txt>
 
-      <TextInput
-        style={s.input}
-        placeholder="username"
-        autoCapitalize="none"
-        autoCorrect={false}
-        maxLength={20}
-        value={username}
-        onChangeText={setUsername}
-      />
+          <View style={{ alignItems: 'center', gap: 12, marginBottom: 30 }}>
+            <Pressable onPress={handlePickAvatar} disabled={busy} style={{ width: 104, height: 104 }}>
+              <Avatar url={avatarUri} username={username || 'M'} size={104} />
+              <View
+                style={{
+                  position: 'absolute',
+                  right: -2,
+                  bottom: -2,
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
+                  backgroundColor: theme.accent,
+                  borderWidth: 3,
+                  borderColor: theme.bg,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <Ionicons name="add" size={18} color="#fff" />
+              </View>
+            </Pressable>
+            <View style={{ flexDirection: 'row' }}>
+              <Txt weight={700} size={13} color="accent" onPress={handlePickAvatar}>
+                {avatarUri ? 'Change photo ' : 'Add a photo '}
+              </Txt>
+              <Txt weight={500} size={13} color="ink3">
+                · optional
+              </Txt>
+            </View>
+          </View>
 
-      <Pressable style={s.primaryButton} onPress={handleSubmit} disabled={busy}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryButtonText}>Continue</Text>}
-      </Pressable>
-    </KeyboardAvoidingView>
+          {/* username field */}
+          <View style={{ gap: 8 }}>
+            <Txt weight={700} size={11} tracking={1.4} color="ink3">
+              USERNAME
+            </Txt>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingHorizontal: 16,
+                borderRadius: radius.md,
+                backgroundColor: theme.card,
+                borderWidth: 1.5,
+                borderColor: valid ? theme.good : name.length > 0 && !validChars ? theme.bad : theme.line,
+              }}>
+              <Txt font="mono" weight={600} size={17} color="ink3">
+                @
+              </Txt>
+              <TextInput
+                value={username}
+                onChangeText={setUsername}
+                placeholder="your_handle"
+                placeholderTextColor={theme.ink3}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={20}
+                editable={!busy}
+                style={{
+                  flex: 1,
+                  paddingVertical: 15,
+                  fontSize: 17,
+                  color: theme.ink,
+                  fontFamily: family('mono', 600),
+                }}
+              />
+              {valid ? (
+                <View
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    backgroundColor: theme.good,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  <Ionicons name="checkmark" size={13} color="#fff" />
+                </View>
+              ) : null}
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Txt weight={600} size={12} color={valid ? 'good' : 'ink3'}>
+                {valid ? 'Looks good' : name.length > 0 && !validChars ? 'Letters, numbers, underscores only' : ' '}
+              </Txt>
+              <Txt font="mono" weight={600} size={12} color="ink3">
+                {name.length}/20
+              </Txt>
+            </View>
+          </View>
+
+          <Card inset pad={16} style={{ marginTop: 8, gap: 9 }}>
+            <Rule ok={validLength} label="3–20 characters" />
+            <Rule ok={validChars} label="Letters, numbers, underscores only" />
+            <Rule ok={false} neutral label="Not taken by anyone else" />
+          </Card>
+
+          <View style={{ flex: 1 }} />
+          <Button
+            label="Continue"
+            onPress={handleSubmit}
+            busy={busy}
+            busyLabel="Saving profile…"
+            disabled={!valid}
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }

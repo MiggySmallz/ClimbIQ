@@ -1,27 +1,37 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import type { Climb, ClimbInput } from '@climbiq/shared';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Switch, View } from 'react-native';
+
 import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-
-import { ThemedText } from '@/components/themed-text';
+  Button,
+  Card,
+  Chip,
+  ConfirmSheet,
+  ErrorState,
+  Field,
+  GradeChip,
+  NavBar,
+  Screen,
+  Txt,
+} from '@/components/ui';
+import { radius } from '@/constants/design';
 import { useClimb, useCreateClimb, useDeleteClimb, useUpdateClimb } from '@/hooks/use-climbs';
+import { useTheme } from '@/hooks/use-theme';
 
-const GRADES = ['VB', ...Array.from({ length: 16 }, (_, i) => `V${i}`)];
-const STYLES = ['Slab', 'Vertical', 'Overhang', 'Roof', 'Crimps', 'Slopers', 'Dyno', 'Compression'];
+const GRADES = ['VB', ...Array.from({ length: 11 }, (_, i) => `V${i}`)];
+const STYLE_OPTIONS = ['Slab', 'Vertical', 'Overhang', 'Roof', 'Crimps', 'Slopers', 'Dyno', 'Compression'];
 
 function toDateString(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+function prettyDate(dateStr: string): string {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 export default function ClimbFormScreen() {
@@ -29,57 +39,70 @@ export default function ClimbFormScreen() {
   const isEdit = typeof id === 'string' && id.length > 0;
   const existing = useClimb(isEdit ? id : undefined);
 
-  // Edit mode: wait for the climb before mounting the form, so its state can
-  // initialize directly from the loaded values (no prefill effect).
   if (isEdit && existing.isPending) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-      </View>
+      <Screen>
+        <NavBar title="Edit climb" onBack={() => router.back()} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" />
+        </View>
+      </Screen>
     );
   }
-  // Don't fall through to a blank form on a load error — a blank form still
-  // carries the edit `id`, so "Save changes" would wipe the climb (M6.5).
   if (isEdit && existing.isError) {
     return (
-      <View style={styles.center}>
-        <ThemedText themeColor="textSecondary">Couldn&apos;t load this climb.</ThemedText>
-        <Pressable style={styles.retryButton} onPress={() => existing.refetch()}>
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      </View>
+      <Screen padded={20}>
+        <NavBar title="Edit climb" onBack={() => router.back()} />
+        <ErrorState
+          title="Couldn't load this climb"
+          body="We couldn't reach the server. Retry to edit it."
+          onRetry={() => existing.refetch()}
+        />
+      </Screen>
     );
   }
   return <ClimbForm id={isEdit ? id : undefined} initial={existing.data ?? null} />;
 }
 
 function ClimbForm({ id, initial }: { id: string | undefined; initial: Climb | null }) {
+  const theme = useTheme();
   const isEdit = id !== undefined;
   const create = useCreateClimb();
   const update = useUpdateClimb();
   const remove = useDeleteClimb();
 
   const [name, setName] = useState(initial?.name ?? '');
+  const [nameError, setNameError] = useState<string | null>(null);
   const [location, setLocation] = useState(initial?.location ?? '');
   const [grade, setGrade] = useState<string | null>(initial?.grade ?? null);
-  const [style, setStyle] = useState<string | null>(initial?.style ?? null);
+  const [styles, setStyles] = useState<string[]>(
+    initial?.style ? initial.style.split(',').map((s) => s.trim()).filter(Boolean) : [],
+  );
   const [sent, setSent] = useState(initial?.sent ?? false);
   const [attemptedAt, setAttemptedAt] = useState(initial?.attempted_at ?? toDateString(new Date()));
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   const busy = create.isPending || update.isPending || remove.isPending;
 
+  function toggleStyle(s: string) {
+    setStyles((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
+  }
+
   async function handleSave() {
     if (!name.trim()) {
-      Alert.alert('Climb', 'Give the climb a name.');
+      setNameError('A name is required — "Blue slab, left" is fine.');
       return;
     }
+    setNameError(null);
+    setSaveError(false);
     const input: ClimbInput = {
       name: name.trim(),
       location: location.trim() || null,
       grade,
-      style,
+      style: styles.length > 0 ? styles.join(', ') : null,
       sent,
       attempted_at: attemptedAt,
       notes: notes.trim() || null,
@@ -89,85 +112,105 @@ function ClimbForm({ id, initial }: { id: string | undefined; initial: Climb | n
       else await create.mutateAsync(input);
       router.back();
     } catch {
-      Alert.alert('Save failed', 'Could not save the climb. Try again.');
+      setSaveError(true);
     }
   }
 
-  function handleDelete() {
+  async function runDelete() {
     if (id === undefined) return;
-    Alert.alert('Delete climb', 'This removes the climb from your journal permanently.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await remove.mutateAsync(id);
-            router.back();
-          } catch {
-            Alert.alert('Delete failed', 'Could not delete the climb. Try again.');
-          }
-        },
-      },
-    ]);
+    try {
+      await remove.mutateAsync(id);
+      setConfirmDelete(false);
+      router.back();
+    } catch {
+      setConfirmDelete(false);
+      setSaveError(true);
+    }
   }
 
   return (
-    <>
-      <Stack.Screen options={{ title: isEdit ? 'Edit climb' : 'Log climb', headerShown: true }} />
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <ThemedText style={styles.label}>Name *</ThemedText>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Orange cave problem"
+    <Screen edges={['top']}>
+      <NavBar
+        title={isEdit ? 'Edit climb' : 'New climb'}
+        left={{ label: 'Cancel', onPress: () => router.back(), disabled: busy }}
+        right={{ label: 'Save', onPress: handleSave, disabled: busy }}
+      />
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24, gap: 18 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
+        <Field
+          label="NAME"
+          labelTag="REQUIRED"
+          placeholder="e.g. Blue Crimp Ladder"
           value={name}
-          onChangeText={setName}
+          onChangeText={(t) => {
+            setName(t);
+            if (nameError) setNameError(null);
+          }}
+          error={nameError ?? undefined}
+          editable={!busy}
         />
 
-        <ThemedText style={styles.label}>Gym / location</ThemedText>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Boulder Barn"
+        <Field
+          label="GYM / LOCATION"
+          placeholder="e.g. Beta Boulders"
           value={location}
           onChangeText={setLocation}
+          editable={!busy}
         />
 
-        <ThemedText style={styles.label}>Grade</ThemedText>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {GRADES.map((g) => (
-            <Pressable
-              key={g}
-              style={[styles.chip, grade === g && styles.chipSelected]}
-              onPress={() => setGrade(grade === g ? null : g)}>
-              <Text style={[styles.chipText, grade === g && styles.chipTextSelected]}>{g}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        <ThemedText style={styles.label}>Style</ThemedText>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {STYLES.map((st) => (
-            <Pressable
-              key={st}
-              style={[styles.chip, style === st && styles.chipSelected]}
-              onPress={() => setStyle(style === st ? null : st)}>
-              <Text style={[styles.chipText, style === st && styles.chipTextSelected]}>{st}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        <View style={styles.rowBetween}>
-          <ThemedText style={styles.label}>Sent it?</ThemedText>
-          <Switch value={sent} onValueChange={setSent} />
+        <View style={{ gap: 9 }}>
+          <Txt weight={700} size={11} tracking={1.4} color="ink3">
+            GRADE
+          </Txt>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {GRADES.map((g) => (
+              <GradeChip key={g} grade={g} selected={grade === g} onPress={() => setGrade(grade === g ? null : g)} />
+            ))}
+          </View>
         </View>
 
-        <ThemedText style={styles.label}>Date</ThemedText>
-        <Pressable style={styles.input} onPress={() => setShowDatePicker(true)}>
-          <ThemedText>{attemptedAt}</ThemedText>
-        </Pressable>
+        <View style={{ gap: 9 }}>
+          <Txt weight={700} size={11} tracking={1.4} color="ink3">
+            STYLE · MULTI
+          </Txt>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {STYLE_OPTIONS.map((s) => (
+              <Chip key={s} label={s} selected={styles.includes(s)} onPress={() => toggleStyle(s)} />
+            ))}
+          </View>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <Card pad={0} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
+            <Txt weight={700} size={15}>
+              Sent it?
+            </Txt>
+            <Switch
+              value={sent}
+              onValueChange={setSent}
+              trackColor={{ true: theme.good, false: theme.chip }}
+              thumbColor="#fff"
+              ios_backgroundColor={theme.chip}
+            />
+          </Card>
+          <Pressable
+            onPress={() => setShowDatePicker(true)}
+            style={{ flex: 1 }}>
+            <Card pad={0} style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 3 }}>
+              <Txt weight={700} size={10} tracking={1.2} color="ink3">
+                DATE
+              </Txt>
+              <Txt font="mono" weight={700} size={15}>
+                {prettyDate(attemptedAt)}
+              </Txt>
+            </Card>
+          </Pressable>
+        </View>
         {showDatePicker && (
           <DateTimePicker
-            value={new Date(attemptedAt)}
+            value={new Date(attemptedAt + 'T00:00:00')}
             mode="date"
             maximumDate={new Date()}
             onChange={(_event, date) => {
@@ -177,88 +220,58 @@ function ClimbForm({ id, initial }: { id: string | undefined; initial: Climb | n
           />
         )}
 
-        <ThemedText style={styles.label}>Notes</ThemedText>
-        <TextInput
-          style={[styles.input, styles.notes]}
+        <Field
+          label="NOTES"
           placeholder="Beta, conditions, how it felt…"
-          multiline
           value={notes}
           onChangeText={setNotes}
+          multiline
+          style={{ minHeight: 74, textAlignVertical: 'top' }}
+          editable={!busy}
         />
 
-        <Pressable style={styles.saveButton} onPress={handleSave} disabled={busy}>
-          {busy ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.saveText}>{isEdit ? 'Save changes' : 'Log climb'}</Text>
-          )}
-        </Pressable>
+        {saveError ? (
+          <Txt weight={700} size={13} color="bad">
+            Could not save. Check your connection and try again.
+          </Txt>
+        ) : null}
 
-        {isEdit && (
-          <Pressable style={styles.deleteButton} onPress={handleDelete} disabled={busy}>
-            <Text style={styles.deleteText}>Delete climb</Text>
+        <Button
+          label={isEdit ? 'Save changes' : 'Save climb'}
+          onPress={handleSave}
+          busy={busy && !remove.isPending}
+          busyLabel="Saving…"
+        />
+
+        {isEdit ? (
+          <Pressable
+            onPress={() => setConfirmDelete(true)}
+            disabled={busy}
+            style={{
+              padding: 16,
+              borderRadius: radius.md,
+              borderWidth: 1,
+              borderColor: 'rgba(224,50,42,0.4)',
+              alignItems: 'center',
+            }}>
+            <Txt weight={700} size={15} color="bad">
+              Delete this climb
+            </Txt>
           </Pressable>
-        )}
+        ) : null}
       </ScrollView>
-    </>
+
+      <ConfirmSheet
+        visible={confirmDelete}
+        title={`Delete “${initial?.name ?? 'this climb'}”?`}
+        message="This removes the log entry. Any linked report stays, but loses its journal link."
+        confirmLabel="Delete climb"
+        confirmBusyLabel="Deleting…"
+        cancelLabel="Keep it"
+        busy={remove.isPending}
+        onConfirm={runDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24 },
-  retryButton: {
-    backgroundColor: '#208AEF',
-    borderRadius: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  retryText: { color: '#fff', fontWeight: '600' },
-  container: { padding: 16, paddingBottom: 48, gap: 6 },
-  label: { fontSize: 14, fontWeight: '600', marginTop: 10 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#D0D4DA',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#1B1F24',
-  },
-  notes: { minHeight: 80, textAlignVertical: 'top' },
-  chips: { gap: 8, paddingVertical: 4 },
-  chip: {
-    borderWidth: 1,
-    borderColor: '#D0D4DA',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#fff',
-  },
-  chipSelected: { backgroundColor: '#208AEF', borderColor: '#208AEF' },
-  chipText: { fontSize: 14, color: '#1B1F24' },
-  chipTextSelected: { color: '#fff', fontWeight: '600' },
-  rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  saveButton: {
-    marginTop: 20,
-    backgroundColor: '#208AEF',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  saveText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  deleteButton: {
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#E5484D',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  deleteText: { color: '#E5484D', fontSize: 15, fontWeight: '600' },
-});

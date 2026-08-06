@@ -1,39 +1,35 @@
-import { Link } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, View } from 'react-native';
 
-import { authStyles as s } from '@/components/auth-styles';
-import { ThemedText } from '@/components/themed-text';
+import { BrandMark } from '@/components/brand-mark';
+import { Button, Field, FieldAction, Screen, Txt } from '@/components/ui';
+import { useTheme } from '@/hooks/use-theme';
 import { signInWithGoogle } from '@/lib/google-auth';
 import { supabase } from '@/lib/supabase';
 
 export default function SignInScreen() {
+  const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleEmailSignIn() {
     if (!email.trim() || !password) {
-      Alert.alert('Sign in', 'Enter your email and password.');
+      setError('Enter your email and password.');
       return;
     }
     setBusy(true);
+    setError(null);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error: err } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
-      if (error) Alert.alert('Sign in failed', error.message);
+      if (err) setError('Email or password is wrong. Please try again.');
       // On success the auth listener redirects via the (auth) layout guard.
     } finally {
       setBusy(false);
@@ -52,55 +48,85 @@ export default function SignInScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={s.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ThemedText style={s.title}>ClimbIQ</ThemedText>
-      <ThemedText themeColor="textSecondary" style={s.subtitle}>
-        Sign in to continue
-      </ThemedText>
+    <Screen padded={26} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, paddingTop: 40 }}>
+          <BrandMark />
+          <Txt weight={700} size={42} lh={40} tracking={-1.9} style={{ marginTop: 46 }}>
+            Log in.{'\n'}Then log the send.
+          </Txt>
+          <Txt weight={500} size={15} lh={22} color="ink2" style={{ marginTop: 10, marginBottom: 32 }}>
+            Journal, reports and friends, right where you left them.
+          </Txt>
 
-      <TextInput
-        style={s.input}
-        placeholder="Email"
-        autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={s.input}
-        placeholder="Password"
-        secureTextEntry
-        autoComplete="password"
-        value={password}
-        onChangeText={setPassword}
-      />
+          <View style={{ gap: 16 }}>
+            <Field
+              label="EMAIL"
+              placeholder="you@climbiq.app"
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={(t) => {
+                setEmail(t);
+                setError(null);
+              }}
+              editable={!busy}
+            />
+            <Field
+              label="PASSWORD"
+              placeholder="••••••••"
+              secureTextEntry={!showPw}
+              autoComplete="password"
+              mono
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                setError(null);
+              }}
+              editable={!busy}
+              error={error ?? undefined}
+              right={
+                <FieldAction
+                  label={showPw ? 'HIDE' : 'SHOW'}
+                  color={theme.accent}
+                  onPress={() => setShowPw((v) => !v)}
+                />
+              }
+            />
+          </View>
 
-      <Pressable style={s.primaryButton} onPress={handleEmailSignIn} disabled={busy}>
-        {busy ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={s.primaryButtonText}>Sign in</Text>
-        )}
-      </Pressable>
+          <View style={{ marginTop: 28, gap: 12 }}>
+            <Button label="Sign in" onPress={handleEmailSignIn} busy={busy} busyLabel="Signing in…" />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.line }} />
+              <Txt weight={700} size={11} tracking={1.5} color="ink3">
+                OR
+              </Txt>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.line }} />
+            </View>
+            <Button
+              label="Continue with Google"
+              variant="secondary"
+              onPress={handleGoogleSignIn}
+              disabled={busy}
+              left={<Ionicons name="logo-google" size={18} color={theme.ink} />}
+            />
+          </View>
 
-      <View style={styles.divider}>
-        <Text style={s.mutedText}>or</Text>
-      </View>
-
-      <Pressable style={s.secondaryButton} onPress={handleGoogleSignIn} disabled={busy}>
-        <Text style={s.secondaryButtonText}>Continue with Google</Text>
-      </Pressable>
-
-      <Link href="/sign-up" style={s.footerLink}>
-        No account? Sign up
-      </Link>
-    </KeyboardAvoidingView>
+          <View style={{ flex: 1 }} />
+          <View style={{ flexDirection: 'row', justifyContent: 'center', paddingVertical: 8 }}>
+            <Txt weight={500} size={14} color="ink2">
+              New here?{' '}
+            </Txt>
+            <Txt weight={700} size={14} color="accent" onPress={() => router.push('/sign-up')}>
+              Create an account
+            </Txt>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  divider: { alignItems: 'center', marginVertical: 12 },
-});

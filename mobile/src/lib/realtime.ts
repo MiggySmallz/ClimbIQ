@@ -1,15 +1,10 @@
 // Supabase realtime helper.
 //
-// Supabase dedupes channels by topic name: calling `supabase.channel(name)` twice
-// with the same name returns the SAME channel instance. If that instance is
-// already subscribed, a second `.on('postgres_changes', …)` throws "cannot add
-// postgres_changes callbacks after subscribe()". This bites whenever a hook is
-// mounted in two places at once (e.g. a badge + a screen) or on a dev
-// double-mount where `removeChannel` from the first mount hasn't completed before
-// the second re-creates the topic.
-//
-// `uniqueTopic(base)` suffixes a process-monotonic counter so every subscription
-// gets its own channel. Cleanup still removes the exact channel it created.
+// Supabase dedupes channels by topic name, so two subscriptions to the same name
+// share one instance — and a second `.on('postgres_changes', …)` after subscribe
+// throws. This bites when a hook mounts in two places at once, or on a dev
+// double-mount. `uniqueTopic(base)` suffixes a monotonic counter so every
+// subscription gets its own channel.
 
 let seq = 0;
 

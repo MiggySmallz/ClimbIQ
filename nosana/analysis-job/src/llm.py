@@ -1,9 +1,8 @@
-# LLM stage (spec §8.1): one Qwen3.6-27B call through a llama.cpp server
-# started once per job (models load once, spec §3). The model VERIFIES
-# rule-detected issues against evidence images and writes coaching — it never
-# decides what was detected (spec §3). Structured output is parsed and
+# LLM stage: one Qwen3.6-27B call through a llama.cpp server started once per job.
+# The model VERIFIES rule-detected issues against evidence images and writes
+# coaching — it never decides what was detected. Structured output is parsed and
 # validated strictly; an unusable response fails the stage (job-level retries
-# handle transient flakiness, spec §8.3).
+# handle transient flakiness).
 import base64
 import json
 import os
@@ -100,11 +99,9 @@ class LlamaServer:
             'temperature': TEMPERATURE,
             'max_tokens': MAX_TOKENS,
             'response_format': {'type': 'json_object'},
-            # Qwen3.6 is a hybrid-thinking model: without this, it spends the
-            # entire max_tokens budget on <think> content and never emits an
-            # answer (empirically: finish_reason="length", content=""). The
-            # chat template checks this exact var name (verified against the
-            # baked template's Jinja source).
+            # Qwen3.6 is a hybrid-thinking model: without this it spends the whole
+            # max_tokens budget on <think> content and never emits an answer. The
+            # chat template checks this exact var name.
             'chat_template_kwargs': {'enable_thinking': False},
         }).encode()
         req = urllib.request.Request(

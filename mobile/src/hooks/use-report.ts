@@ -36,6 +36,21 @@ export function useSetReportVisibility(id: string) {
   });
 }
 
+export function useDeleteReport(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => reportsService.deleteReport(id),
+    onSuccess: () => {
+      // The report is gone everywhere it's derived from the reports table.
+      qc.removeQueries({ queryKey: [...REPORT_KEY, id] });
+      void qc.invalidateQueries({ queryKey: ['analyses'] });
+      void qc.invalidateQueries({ queryKey: ['feed'] });
+      void qc.invalidateQueries({ queryKey: ['report-trends'] });
+      void qc.invalidateQueries({ queryKey: ['analyzed-climb-ids'] });
+    },
+  });
+}
+
 export function useSetReportClimb(id: string, videoId: string) {
   const qc = useQueryClient();
   return useMutation({

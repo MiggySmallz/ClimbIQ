@@ -1,10 +1,11 @@
-// Job + push routes (spec §7.2, M3.9).
+// Job + push routes:
+//   POST   /jobs/:id/retry → re-run a failed analysis job
+//   DELETE /jobs/:id       → discard a non-completed run + its clip; cancels the
+//                            Nosana job if live
+//   POST   /push/register  → register/refresh this device's Expo push token
 //
-//   POST /jobs/:id/retry   → user-initiated re-run of a failed analysis job
-//   POST /push/register    → register/refresh this device's Expo push token
-//
-// Rows are written with the service-role client (RLS bypassed), so ownership is
-// verified here against the JWT-derived userId.
+// Rows use the service-role client (RLS bypassed), so ownership is verified here
+// against the JWT-derived userId.
 
 import { type AnalyzeVideoResponse, type RegisterPushRequest } from '@climbiq/shared';
 import type { FastifyInstance } from 'fastify';
@@ -12,7 +13,7 @@ import type { FastifyInstance } from 'fastify';
 import { postAndRecordJob } from '../analysis/dispatch.js';
 import { loadNosanaConfig } from '../config.js';
 import { createAnalysisJobPoster } from '../nosana/postAnalysisJob.js';
-import { headObject } from '../r2/client.js';
+import { deleteObjects, headObject, listObjectKeys } from '../r2/client.js';
 
 // A retry row joined to its video (to-one FK; supabase types it loosely).
 interface RetryJobRow {
@@ -37,11 +38,9 @@ const registerPushSchema = {
 export function registerJobRoutes(app: FastifyInstance): void {
   const { client, bucket } = app.r2;
 
-  // M3.9 — manual retry of a failed job. The automatic poller retries transient
-  // failures up to 2× (§8.3); this is the user's "tap to retry" after that gives
-  // up, or after they fix conditions on their end. It re-posts on the SAME
-  // report_id (artifacts land where the report will point) and resets `attempt`
-  // so the fresh manual run gets its own automatic-retry budget.
+  // Manual retry of a failed job, after the poller's automatic retries give up.
+  // Re-posts on the same report_id and resets `attempt` so the manual run gets a
+  // fresh automatic-retry budget.
   app.post<{ Params: { id: string } }>(
     '/jobs/:id/retry',
     async (request, reply): Promise<AnalyzeVideoResponse | undefined> => {
@@ -55,7 +54,7 @@ export function registerJobRoutes(app: FastifyInstance): void {
         .maybeSingle();
       if (error) throw new Error(`analysis_jobs select failed: ${error.message}`);
       const job = data as unknown as RetryJobRow | null;
-      // Don't reveal existence of other users' rows.
+      // Don't reveal other users' rows.
       if (!job || !job.videos || job.videos.user_id !== userId) {
         return reply.code(404).send({ error: 'not found' });
       }
@@ -82,8 +81,8 @@ export function registerJobRoutes(app: FastifyInstance): void {
         return reply.code(503).send({ error: 'analysis temporarily unavailable' });
       }
 
-      // The retention sweep (M6.1) may have deleted the original after 30 days
-      // even if the row still says 'uploaded' — confirm the object is really there.
+      // The retention sweep may have deleted the original even if the row still
+      // says 'uploaded' — confirm the object is really there.
       const head = await headObject(client, bucket, video.r2_key);
       if (!head) {
         return reply.code(409).send({ error: 'video no longer available' });
@@ -120,8 +119,73 @@ export function registerJobRoutes(app: FastifyInstance): void {
     },
   );
 
-  // M3.9 — register/refresh this device's Expo push token (spec §7.2). Idempotent
-  // on (user_id, token); the client half (token acquisition on app start) is M3.17.
+  // Deletion of an analysis run that hasn't produced a report — any state except
+  // `done` (queued/posted/running or error/timeout). No reports row exists for
+  // these, so DELETE /reports/:id doesn't apply. If the run is live on Nosana we
+  // cancel it first, then deleting the video cascades the analysis_jobs row.
+  app.delete<{ Params: { id: string } }>('/jobs/:id', async (request, reply) => {
+    const userId = request.userId;
+    const jobId = request.params.id;
+
+    const { data, error } = await app.supabase
+      .from('analysis_jobs')
+      .select('id, status, report_id, nosana_job_id, videos(id, user_id, r2_key)')
+      .eq('id', jobId)
+      .maybeSingle();
+    if (error) throw new Error(`analysis_jobs select failed: ${error.message}`);
+    const job = data as unknown as {
+      id: string;
+      status: string;
+      report_id: string | null;
+      nosana_job_id: string | null;
+      videos: { id: string; user_id: string; r2_key: string } | null;
+    } | null;
+    // Don't reveal other users' rows.
+    if (!job || !job.videos || job.videos.user_id !== userId) {
+      return reply.code(404).send({ error: 'not found' });
+    }
+
+    // A completed run owns a reports row FK-referencing the video, so it must be
+    // removed via DELETE /reports/:id instead.
+    if (job.status === 'done') {
+      return reply.code(409).send({ error: 'use report deletion for a completed analysis' });
+    }
+
+    // If the job is live on Nosana, cancel it first so we stop paying for a run
+    // we're about to discard. Best-effort — an already-gone job or unconfigured
+    // Nosana must not block the delete. (Queued jobs have no id to cancel.)
+    if (job.nosana_job_id) {
+      try {
+        const poster = createAnalysisJobPoster(loadNosanaConfig());
+        await poster.stopJob(job.nosana_job_id);
+      } catch (err) {
+        app.log.error(err, `job deletion: Nosana stop failed for job ${jobId} (${job.nosana_job_id})`);
+      }
+    }
+
+    // Sweep R2: any partial artifacts under reports/{report_id}/ + the raw video.
+    // Best-effort — a lingering blob must not block the delete.
+    try {
+      const { client, bucket } = app.r2;
+      const keys = job.report_id
+        ? await listObjectKeys(client, bucket, `reports/${job.report_id}/`)
+        : [];
+      keys.push(job.videos.r2_key);
+      await deleteObjects(client, bucket, keys);
+    } catch (err) {
+      app.log.error(err, `job deletion: R2 sweep failed for job ${jobId}`);
+    }
+
+    const { error: delErr } = await app.supabase
+      .from('videos')
+      .delete()
+      .eq('id', job.videos.id);
+    if (delErr) throw new Error(`videos delete failed: ${delErr.message}`);
+
+    return reply.code(204).send();
+  });
+
+  // Register/refresh this device's Expo push token. Idempotent on (user_id, token).
   app.post<{ Body: RegisterPushRequest }>(
     '/push/register',
     { schema: registerPushSchema },

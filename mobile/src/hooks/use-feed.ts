@@ -1,5 +1,5 @@
-// Friends' shared-report feed (spec §6, M5.3). Initial reverse-chron fetch via
-// TanStack Query, kept fresh by a Supabase realtime subscription on `reports`.
+// Friends' shared-report feed. Initial reverse-chron fetch via TanStack Query,
+// kept fresh by a Supabase realtime subscription on `reports`.
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -22,10 +22,6 @@ export function useFeed() {
     enabled: !!myId,
   });
 
-  // A friend sharing a report is either an INSERT already at visibility='friends'
-  // or an UPDATE flipping private → friends, so we listen to all changes and
-  // refetch. RLS scopes the stream to rows we're allowed to see (spec §7.1), so
-  // this never leaks a private report.
   useEffect(() => {
     if (!myId) return;
     const channel = supabase

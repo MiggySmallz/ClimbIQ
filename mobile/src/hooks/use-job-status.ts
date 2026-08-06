@@ -1,7 +1,3 @@
-// Live analysis-job status via Supabase realtime (spec §6, M3.16). Fetches the
-// current row once, then subscribes to UPDATEs on it (queued → posted → running
-// → done | error | timeout). RLS scopes the stream to the video owner.
-
 import type { AnalysisJob } from '@climbiq/shared';
 import { useEffect, useState } from 'react';
 

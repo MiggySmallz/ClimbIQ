@@ -1,7 +1,6 @@
-// Technique-progress aggregation (spec §6 Stats/Progress, M5.4). Pure functions
-// over the user's stored `reports` rows — never raw video (§2 retention). The
-// stable `observations[].key` vocabulary is what makes progress-over-time
-// possible (§10): a key means the same thing across every report.
+// Technique-progress aggregation. Pure functions over the user's stored `reports`
+// rows. The stable `observations[].key` vocabulary is what makes progress-over-
+// time possible: a key means the same thing across every report.
 
 import type { Observation, Scores } from '@climbiq/shared';
 
@@ -11,6 +10,8 @@ export interface TrendReport {
   created_at: string;
   observations: Observation[];
   scores: Scores;
+  /** "beta" grade estimate, e.g. "V4"; null when the heuristic had too little signal. */
+  grade_estimate: string | null;
 }
 
 export interface TrendPoint {
@@ -47,11 +48,9 @@ export function overallScoreTrend(reports: TrendReport[]): TrendPoint[] {
 }
 
 /**
- * Per-issue severity trend: for every issue that was *verified* in at least one
- * report in the window, a value per report (0 = not flagged / LLM-dismissed that
- * climb, else severity 1–3). Only verified observations count, matching the
- * report screen's "what to work on" vs "checked, not a problem" split (§10).
- * Sorted worst-now first so the issue to focus on is at the top.
+ * Per-issue severity trend: for every issue *verified* in at least one report in
+ * the window, a value per report (0 = not flagged / dismissed that climb, else
+ * severity 1–3). Only verified observations count. Sorted worst-now first.
  */
 export function issueSeverityTrends(reports: TrendReport[]): IssueTrend[] {
   const keys = new Set<string>();

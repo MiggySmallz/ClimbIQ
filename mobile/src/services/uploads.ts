@@ -1,6 +1,6 @@
-// Upload + analysis flow (spec §6, M3.15): create a videos row → PUT the clip
-// straight to R2 with a progress bar → trigger analysis. The orchestrator only
-// ever hands out presigned URLs; bytes go phone → R2 directly, never through it.
+// Upload + analysis flow: create a videos row → PUT the clip straight to R2 with
+// a progress bar → trigger analysis. The orchestrator only hands out presigned
+// URLs; bytes go phone → R2 directly, never through it.
 
 import {
   type AnalyzeVideoResponse,
@@ -9,7 +9,7 @@ import {
 } from '@climbiq/shared';
 import { File, UploadType } from 'expo-file-system';
 
-import { apiFetch } from '@/lib/api';
+import { apiFetch, apiVoid } from '@/lib/api';
 
 export interface ClipMeta {
   uri: string;
@@ -25,7 +25,7 @@ function fileSize(uri: string): number {
   return size;
 }
 
-/** M3.4 — register the clip, get back a presigned PUT URL. */
+/** Register the clip, get back a presigned PUT URL. */
 export async function createVideo(clip: ClipMeta): Promise<CreateVideoResponse & { size: number }> {
   const size = fileSize(clip.uri);
   const body: CreateVideoRequest = {
@@ -66,20 +66,25 @@ export async function uploadToR2(
   onProgress(1);
 }
 
-/** M3.5 — start the analysis job for an uploaded video. */
+/** Start the analysis job for an uploaded video. */
 export async function requestAnalysis(videoId: string): Promise<AnalyzeVideoResponse> {
   return apiFetch<AnalyzeVideoResponse>(`/videos/${videoId}/analyze`, { method: 'POST' });
 }
 
-/** M3.9 — user-initiated re-run of a failed job (same video, no re-upload). */
+/** Re-run a failed job (same video, no re-upload). */
 export async function retryAnalysis(jobId: string): Promise<AnalyzeVideoResponse> {
   return apiFetch<AnalyzeVideoResponse>(`/jobs/${jobId}/retry`, { method: 'POST' });
 }
 
+/** Discard a failed analysis run and its uploaded clip (backend clears the job
+ *  row, the video, and any R2 objects). Owner-only, enforced by the orchestrator. */
+export async function deleteAnalysis(jobId: string): Promise<void> {
+  await apiVoid(`/jobs/${jobId}`, { method: 'DELETE' });
+}
+
 /**
- * Save an in-app recording to the device gallery (spec §6 — the server copy
- * expires, this is the user's permanent raw video). Returns false if permission
- * is denied. Throws only on unexpected failures.
+ * Save an in-app recording to the device gallery (the server copy expires, this
+ * is the user's permanent raw video). Returns false if permission is denied.
  */
 export async function saveToGallery(fileUri: string): Promise<boolean> {
   // Lazy-import so a missing native module never breaks the upload path — this is
